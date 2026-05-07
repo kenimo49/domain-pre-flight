@@ -1,34 +1,27 @@
-"""Trademark conflict check across USPTO (US), J-PlatPat (JP), and EUIPO (EU).
+"""Trademark conflict check across USPTO (US), EUIPO (EU), and J-PlatPat (JP).
 
-Each jurisdiction is queried independently and may return one of:
+**Implementation note (v0.7.1)**: every jurisdiction is now ``not_supported``;
+the report exposes a pre-filled deeplink for manual verification instead of
+attempting a live query. See ``docs/decisions/0009-trademark-deeplink-only.md``
+for the rationale — public, documented, no-auth search APIs do not currently
+exist for any of the three registries we care about, so attempting them
+returned ``lookup_failed`` for almost every domain we tested.
 
-- ``ok``               — query succeeded, results are populated (possibly empty)
-- ``lookup_failed``    — transport / API error; the user should retry or
-                         consult the registry directly
-- ``not_supported``    — no public, redistributable query path is available;
-                         we surface a deep-link to the official search UI so
-                         the user can verify manually
+The data structures and the public entry point are unchanged so callers
+that previously consumed ``TrademarkReport`` keep working; only the
+``status`` and ``deeplink`` semantics shifted.
 
-This module surfaces *candidates*, not legal opinions. "Confusingly similar"
+This tool surfaces *candidates*, not legal opinions. "Confusingly similar"
 is a legal standard, not a string-distance threshold.
 """
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Literal
-
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
-DEFAULT_TIMEOUT = 12
-USER_AGENT = "domain-pre-flight/0.1 (+https://github.com/kenimo49/domain-pre-flight)"
+from urllib.parse import quote_plus
 
 JurisdictionStatus = Literal["ok", "lookup_failed", "not_supported"]
-
-
 Similarity = Literal["exact", "similar"]
 
 
@@ -67,145 +60,44 @@ class TrademarkReport:
         )
 
 
-def _session() -> requests.Session:
-    s = requests.Session()
-    s.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
-    # 5xx responses from public registries are common at peak load; one retry
-    # with backoff turns a flaky lookup into a soft success without doubling
-    # the worst-case wait for a real outage.
-    retry = Retry(
-        total=2,
-        backoff_factor=0.5,
-        status_forcelist=[502, 503, 504],
-        allowed_methods=frozenset(["GET", "POST"]),
-    )
-    adapter = HTTPAdapter(max_retries=retry)
-    s.mount("https://", adapter)
-    s.mount("http://", adapter)
-    return s
-
-
-def _query_uspto(name: str, session: requests.Session, timeout: int) -> JurisdictionResult:
-    """USPTO Trademark Search API (developer.uspto.gov)."""
-    deeplink = f"https://tmsearch.uspto.gov/search/search-information?q={name}"
-    url = "https://tmsearch.uspto.gov/api/search/case"
-    params = {
-        "searchText": name,
-        "rows": 25,
-        "fromIndex": 0,
-    }
-    try:
-        resp = session.get(url, params=params, timeout=timeout)
-    except requests.RequestException as e:
-        return JurisdictionResult("us", "lookup_failed", f"transport: {e.__class__.__name__}", deeplink=deeplink)
-
-    if resp.status_code != 200:
-        return JurisdictionResult(
-            "us", "lookup_failed", f"http {resp.status_code}", deeplink=deeplink
-        )
-
-    matches: list[TrademarkMatch] = []
-    try:
-        data = resp.json()
-        hits = data.get("hits", {}).get("hits", []) or data.get("results", []) or []
-        for hit in hits[:10]:
-            src = hit.get("_source", hit) if isinstance(hit, dict) else {}
-            mark = (src.get("markIdentification") or src.get("mark") or "").strip()
-            if not mark:
-                continue
-            matches.append(
-                TrademarkMatch(
-                    mark=mark,
-                    owner=(src.get("ownerName") or src.get("owner") or "").strip(),
-                    status_text=(src.get("statusDesc") or src.get("status") or "").strip(),
-                    serial=str(src.get("serialNumber") or src.get("serial") or ""),
-                    classes=list(src.get("internationalClass") or []),
-                    similarity="exact" if mark.lower() == name.lower() else "similar",
-                )
-            )
-    except (ValueError, KeyError, TypeError):
-        return JurisdictionResult(
-            "us", "lookup_failed", "unrecognised response shape", deeplink=deeplink
-        )
-
-    return JurisdictionResult("us", "ok", matches=matches, deeplink=deeplink)
-
-
-def _query_euipo(name: str, session: requests.Session, timeout: int) -> JurisdictionResult:
-    """EUIPO TMview public search API."""
-    deeplink = f"https://www.tmdn.org/tmview/#/tmview/results?text={name}"
-    url = "https://www.tmdn.org/tmview/api/search/results"
-    payload = {
-        "page": 1,
-        "pageSize": 25,
-        "criteria": "C",
-        "basicSearch": name,
-    }
-    try:
-        resp = session.post(url, json=payload, timeout=timeout)
-    except requests.RequestException as e:
-        return JurisdictionResult("eu", "lookup_failed", f"transport: {e.__class__.__name__}", deeplink=deeplink)
-
-    if resp.status_code != 200:
-        return JurisdictionResult(
-            "eu", "lookup_failed", f"http {resp.status_code}", deeplink=deeplink
-        )
-
-    matches: list[TrademarkMatch] = []
-    try:
-        data = resp.json()
-        for hit in (data.get("tradeMarks") or [])[:10]:
-            mark = (hit.get("tmName") or "").strip()
-            if not mark:
-                continue
-            matches.append(
-                TrademarkMatch(
-                    mark=mark,
-                    owner=(hit.get("applicantName") or "").strip(),
-                    status_text=(hit.get("status") or "").strip(),
-                    serial=str(hit.get("applicationNumber") or ""),
-                    classes=[str(c) for c in (hit.get("niceClass") or [])],
-                    similarity="exact" if mark.lower() == name.lower() else "similar",
-                )
-            )
-    except (ValueError, KeyError, TypeError):
-        return JurisdictionResult(
-            "eu", "lookup_failed", "unrecognised response shape", deeplink=deeplink
-        )
-
-    return JurisdictionResult("eu", "ok", matches=matches, deeplink=deeplink)
-
-
-def _query_jplatpat(name: str, session: requests.Session, timeout: int) -> JurisdictionResult:
-    """J-PlatPat has no public API. Surface a deep-link for manual review."""
-    deeplink = f"https://www.j-platpat.inpit.go.jp/t0100?term={name}"
-    return JurisdictionResult(
-        "jp",
-        "not_supported",
-        "J-PlatPat has no public query API — open the deeplink to verify manually",
-        deeplink=deeplink,
-    )
-
-
-_QUERIES = {
-    "us": _query_uspto,
-    "eu": _query_euipo,
-    "jp": _query_jplatpat,
+_DEEPLINK_TEMPLATES: dict[str, tuple[str, str]] = {
+    "us": (
+        "https://tmsearch.uspto.gov/search/search-information?q={q}",
+        "USPTO has no public, documented search API; verify manually",
+    ),
+    "eu": (
+        "https://www.tmdn.org/tmview/#/tmview/results?text={q}",
+        "EUIPO TMview has no stable public search API; verify manually",
+    ),
+    "jp": (
+        "https://www.j-platpat.inpit.go.jp/t0100?term={q}",
+        "J-PlatPat has no public query API; verify manually",
+    ),
 }
 
-# J-PlatPat resolves synchronously (no public API, deeplink only); keeping it
-# out of the executor leaves the pool sized to actual network workers.
-_NETWORK_QUERIES = frozenset({"us", "eu"})
+
+def _deeplink_for(jurisdiction: str, sld: str) -> JurisdictionResult:
+    template, detail = _DEEPLINK_TEMPLATES[jurisdiction]
+    return JurisdictionResult(
+        jurisdiction=jurisdiction,
+        status="not_supported",
+        detail=detail,
+        deeplink=template.format(q=quote_plus(sld)),
+    )
 
 
 def check_trademark(
     domain: str,
     *,
     jurisdictions: list[str] | None = None,
-    timeout: int = DEFAULT_TIMEOUT,
-    max_workers: int = 2,
+    timeout: int = 10,  # kept for backward compatibility, unused
+    max_workers: int = 1,  # kept for backward compatibility, unused
 ) -> TrademarkReport:
-    """Fan out trademark queries across the requested jurisdictions."""
+    """Return a TrademarkReport with deeplinks for manual verification.
+
+    All jurisdictions resolve synchronously with ``status="not_supported"``.
+    No network call is made; the user follows the deeplink to verify.
+    """
     from .basic import normalise
 
     domain, sld, _ = normalise(domain)
@@ -215,51 +107,18 @@ def check_trademark(
         report.notes.append("no SLD parsed — trademark check skipped")
         return report
 
-    selected = jurisdictions or list(_QUERIES.keys())
-    unknown = [j for j in selected if j not in _QUERIES]
+    selected = jurisdictions or list(_DEEPLINK_TEMPLATES.keys())
+    unknown = [j for j in selected if j not in _DEEPLINK_TEMPLATES]
     if unknown:
         report.notes.append(f"ignored unknown jurisdictions: {', '.join(unknown)}")
-    selected = [j for j in selected if j in _QUERIES]
+    selected = [j for j in selected if j in _DEEPLINK_TEMPLATES]
 
-    session = _session()
-    network_jurisdictions = [j for j in selected if j in _NETWORK_QUERIES]
-    sync_jurisdictions = [j for j in selected if j not in _NETWORK_QUERIES]
-
-    if network_jurisdictions:
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = [
-                pool.submit(_QUERIES[j], sld, session, timeout) for j in network_jurisdictions
-            ]
-            for f in futures:
-                report.jurisdictions.append(f.result())
-    for j in sync_jurisdictions:
-        report.jurisdictions.append(_QUERIES[j](sld, session, timeout))
+    for j in selected:
+        report.jurisdictions.append(_deeplink_for(j, sld))
 
     report.jurisdictions.sort(key=lambda j: j.jurisdiction)
-
-    exact_jurisdictions: list[str] = []
-    similar_jurisdictions: list[str] = []
-    failed_jurisdictions: list[str] = []
-    for j in report.jurisdictions:
-        if j.status == "lookup_failed":
-            failed_jurisdictions.append(j.jurisdiction)
-        if any(m.similarity == "exact" for m in j.matches):
-            exact_jurisdictions.append(j.jurisdiction)
-        elif j.matches:
-            similar_jurisdictions.append(j.jurisdiction)
-
-    if exact_jurisdictions:
-        report.issues.append(
-            f"exact trademark match in: {', '.join(exact_jurisdictions)} — UDRP / infringement risk. "
-            "This tool flags candidates; consult counsel before proceeding."
-        )
-    if similar_jurisdictions:
-        report.notes.append(
-            f"similar marks found in: {', '.join(similar_jurisdictions)} — review the results before deciding."
-        )
-    if failed_jurisdictions:
-        report.notes.append(
-            f"could not query: {', '.join(failed_jurisdictions)} — verify manually using the provided deeplinks."
-        )
-
+    report.notes.append(
+        "trademark queries surface deeplinks only — open each link to verify "
+        "manually. See docs/decisions/0009-trademark-deeplink-only.md."
+    )
     return report

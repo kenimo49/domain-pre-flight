@@ -16,6 +16,7 @@ ADRs are the cheapest way to keep a future contributor (human or AI) from undoin
 | [0006](0006-trademark-default-off.md) | Trademark check defaults to OFF (opt-in)               | Accepted |
 | [0007](0007-score-weights-centralised.md) | All score weights centralised in `score.py`           | Accepted |
 | [0008](0008-llmo-experimental-marker.md) | LLMO check is permanently marked experimental         | Accepted |
+| [0009](0009-trademark-deeplink-only.md) | Trademark check is deeplink-only (supersedes part of 0006) | Accepted |
 
 ## Writing a new ADR
 

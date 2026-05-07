@@ -56,13 +56,15 @@ dpf check <domain> --json
 
 Runs basic + history + typosquat + semantics + llmo. ~1 second. Use this for a "quick look" check.
 
-### Full pre-flight (includes paid-API-equivalent checks)
+### Full pre-flight (includes the slower / opt-in checks)
 
 ```bash
 dpf check <domain> --check-handles --check-trademark --json
 ```
 
-Adds same-name handle availability across GitHub / npm / PyPI / X / Instagram, plus USPTO + EUIPO trademark queries (J-PlatPat surfaces a deeplink). ~10 seconds. Use this when the user is about to commit to a real product launch.
+Adds same-name handle availability across GitHub / npm / PyPI / X / Instagram, plus pre-filled trademark deeplinks for USPTO + EUIPO + J-PlatPat. ~5 seconds. Use this when the user is about to commit to a real product launch.
+
+**Important about trademark output**: every jurisdiction returns `status="not_supported"` with a populated `deeplink`. This is not a bug — the registries publish no stable, documented, no-auth search API (see ADR 0009). When summarising, **always tell the user that trademark verification is manual** and surface the deeplinks so they can click through.
 
 ### Targeted single-axis checks
 

@@ -5,7 +5,7 @@
 
 ## Responsibility
 
-Query trademark registries for marks similar to the SLD across US (USPTO), EU (EUIPO), and JP (J-PlatPat). Surface candidates and a deeplink for manual verification. **Flags candidates, never legal opinions.**
+Surface a deeplink to each jurisdiction's official trademark search UI (US: USPTO; EU: EUIPO TMview; JP: J-PlatPat) so the user can manually verify. **No live API queries** — see [ADR 0009](../decisions/0009-trademark-deeplink-only.md) for the rationale (none of the three registries publishes a stable, documented, no-auth search API). Flags candidates, never legal opinions.
 
 ## Public API
 
@@ -56,29 +56,24 @@ def check_trademark(
 
 ## Conventions / invariants
 
-- Three jurisdictions registered in `_QUERIES`:
-  - `us` — `_query_uspto` — live GET against `tmsearch.uspto.gov/api/search/case`
-  - `eu` — `_query_euipo` — live POST against `tmdn.org/tmview/api/search/results`
-  - `jp` — `_query_jplatpat` — `not_supported`, returns deeplink only (no public API)
-- Every `JurisdictionResult` carries a `deeplink` even when the query succeeded — it serves as the "verify manually" link.
-- `lookup_failed` status indicates an HTTP error or unrecognised response shape. The user is told and pointed at the deeplink.
-- `not_supported` status indicates the registry has no public query path. Currently only J-PlatPat.
-
-## Conventions for response parsing
-
-- USPTO and EUIPO both use varying response shapes; the parser tolerates `_source` wrappers, missing fields, and uppercase/lowercase status strings.
-- Empty result list with HTTP 200 is `status="ok"` and `matches=[]`. That is meaningfully different from `lookup_failed`.
+- Three jurisdictions registered in `_DEEPLINK_TEMPLATES`:
+  - `us` → `tmsearch.uspto.gov/search/search-information?q=<sld>`
+  - `eu` → `tmdn.org/tmview/#/tmview/results?text=<sld>`
+  - `jp` → `j-platpat.inpit.go.jp/t0100?term=<sld>`
+- Every `JurisdictionResult` is `status="not_supported"` with a populated `deeplink`. The data structures still accommodate `status="ok"` + populated `matches` so a future live-query restoration is plug-in.
+- The function takes `timeout` and `max_workers` for backward compatibility — both unused under deeplink-only mode.
+- `_deeplink_for(jurisdiction, sld)` is the single helper; the SLD is URL-encoded via `quote_plus` before being substituted into the template.
 
 ## Common edits
 
-| Change                                    | Touch                                 |
-| ----------------------------------------- | ------------------------------------- |
-| Add a jurisdiction                        | New `_query_<code>` + entry in `_QUERIES` + tests + docs |
-| Tune similarity heuristics                | `similarity` field is currently exact-vs-similar based on `mark.lower() == name.lower()`; tighten as needed |
-| Add API key support for premium endpoints | Add an env-var lookup inside `_query_<code>` and document in README |
+| Change                                    | Touch                                          |
+| ----------------------------------------- | ---------------------------------------------- |
+| Add a jurisdiction                        | Add an entry to `_DEEPLINK_TEMPLATES` (jurisdiction → (template, detail)) + tests + docs |
+| Update a deeplink URL                     | The relevant entry in `_DEEPLINK_TEMPLATES`    |
+| Restore live querying for a jurisdiction  | Re-introduce the `_query_<code>` function, add to a `_QUERIES` registry, fan out via `ThreadPoolExecutor`. Update ADR 0009 accordingly. |
 
 ## Anti-patterns specific to this module
 
-- Treating "no matches found" as `lookup_failed`. They are distinct.
-- Surfacing legal opinions in `issues`. The wording always says "candidates", "consult counsel", etc. See ADR 0006 / README.
-- Removing the deeplink from a `lookup_failed` result. The deeplink is the user's escape hatch.
+- Speculatively guessing API endpoints again. ADR 0009 explicitly rejects this — only restore live querying when a registry publishes a documented, stable, no-auth search API.
+- Surfacing legal opinions in `issues`. The wording always says "candidates", "consult counsel", etc.
+- Removing the top-level `notes` entry that points the user at the deeplinks. That note is the UX contract.

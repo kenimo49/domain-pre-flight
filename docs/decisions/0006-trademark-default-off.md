@@ -1,6 +1,6 @@
 # ADR 0006: Trademark check defaults to OFF
 
-- **Status**: Accepted
+- **Status**: Partially superseded by [ADR 0009](0009-trademark-deeplink-only.md) — the live-query part of this decision was removed; the "default OFF, opt-in" part still applies.
 - **Date**: 2026-05-08
 
 ## Context

@@ -22,7 +22,7 @@ It is **not** a domain investing / drop-catching tool. It is the last-mile check
 | Past content history       | Wayback Machine snapshot count, first/last archived date, archive span                              | archive.org (free, no auth) |
 | Same-name handle check     | GitHub / npm / PyPI / X / Instagram availability for the SLD                                        | public APIs / HEAD requests |
 | Typosquat / brand similarity | Levenshtein distance + homoglyph/bigram heuristics against ~120 widely-recognised brand stems     | bundled list, offline       |
-| Trademark conflict (opt-in) | USPTO + EUIPO TMview search, J-PlatPat deeplink for manual review                                  | public registries, no auth  |
+| Trademark conflict (opt-in) | Pre-filled USPTO + EUIPO + J-PlatPat deeplinks for manual verification (deeplink-only — see ADR 0009) | offline, no API queries |
 | Multi-language semantics    | Negative-meaning scan across EN / ES / PT / JA / KO / ZH (curated bundled lists)                    | bundled lists, offline      |
 | LLMO fitness (experimental) | Pronunciation / memorability heuristic (cluster, vowel ratio, length, repeats) — 0–20 score          | offline heuristics          |
 | Aggregate verdict          | 0–100 score, 4 bands (GREEN / YELLOW / ORANGE / RED), itemised deductions                           | derived           |
@@ -102,7 +102,7 @@ The features below are planned but **not yet implemented**. Order is rough; PRs 
 
 1. ~~**Same-name social / package availability** — check whether the matching handle is free on GitHub, npm, PyPI, and major social networks.~~ **Shipped in v0.2** — `dpf handles` and `--check-handles`.
 2. ~~**Typosquat / brand-similarity flag** — Levenshtein distance and bigram similarity against a curated brand list.~~ **Shipped in v0.3** — `dpf typosquat` (default ON in `dpf check`, disable with `--no-typosquat`).
-3. ~~**Trademark conflict check** — query USPTO, EUIPO, and J-PlatPat for identical and confusingly similar marks.~~ **Shipped in v0.4** — `dpf trademark` and `--check-trademark` (opt-in). USPTO and EUIPO are queried live; J-PlatPat surfaces a deeplink for manual review. **This tool flags candidates, not legal opinions — consult counsel before acting on a flag.**
+3. ~~**Trademark conflict check** — query USPTO, EUIPO, and J-PlatPat for identical and confusingly similar marks.~~ **Shipped in v0.4, revised in v0.7.1** — `dpf trademark` and `--check-trademark` (opt-in). All three jurisdictions surface a pre-filled deeplink for manual verification; the live-query path was removed (ADR 0009) because none of the registries publishes a stable, documented, no-auth search API. **This tool flags candidates, not legal opinions — consult counsel before acting on a flag.**
 
 ### Medium-term — quality-of-life and global readiness
 

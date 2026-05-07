@@ -110,14 +110,10 @@ def _typosquat_deductions(report: TyposquatReport) -> list[tuple[str, int]]:
 
 
 def _trademark_deductions(report: TrademarkReport) -> list[tuple[str, int]]:
-    if not report.jurisdictions:
-        return []
-    exact = [j for j in report.jurisdictions if any(m.similarity == "exact" for m in j.matches)]
-    if exact:
-        return [(f"exact trademark match in {','.join(j.jurisdiction for j in exact)}", 50)]
-    similar_count = sum(1 for j in report.jurisdictions if j.matches)
-    if similar_count:
-        return [(f"similar trademarks found in {similar_count} jurisdiction(s)", 10)]
+    # The trademark module is deeplink-only as of ADR 0009; no machine-
+    # detected matches exist, so there is nothing to deduct. Kept as a
+    # function (returning []) so a future live-query restoration can plug
+    # weights back in without touching aggregate(...).
     return []
 
 
