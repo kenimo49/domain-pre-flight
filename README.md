@@ -147,6 +147,22 @@ CI runs `pytest` against Python 3.10 / 3.11 / 3.12 plus the offline smoke suite 
 
 MIT — see [LICENSE](LICENSE).
 
+## Documentation
+
+This repo is structured for both human readers and AI coding agents (Claude Code, Cursor, etc.). Pick the doc that matches your task:
+
+| If you want to…                                  | Read                                                          |
+| ------------------------------------------------ | ------------------------------------------------------------- |
+| Use the CLI                                      | [`docs/guide/usage.md`](docs/guide/usage.md)                  |
+| Understand the codebase as a whole               | [`CLAUDE.md`](CLAUDE.md), then [`docs/architecture.md`](docs/architecture.md) |
+| Add a new check / extend an existing one        | [`docs/agents/extending-checks.md`](docs/agents/extending-checks.md) |
+| Edit only data (brand list, word lists, TLDs)   | [`docs/agents/data-updates.md`](docs/agents/data-updates.md)  |
+| Tune scoring weights                             | [`docs/agents/tuning-scores.md`](docs/agents/tuning-scores.md) |
+| Understand *why* a design choice was made       | [`docs/decisions/`](docs/decisions/)                          |
+| Get the smallest possible context for one module| [`docs/context-cards/`](docs/context-cards/)                  |
+
+The `docs/agents/` and `docs/context-cards/` directories are written for tasks that span exactly one module — load only the relevant card to keep context cost predictable.
+
 ## Background
 
 This project is a tools-side companion to the (Japanese-language) book
