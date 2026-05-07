@@ -15,6 +15,7 @@ from .checks.basic import BasicReport, check_basic
 from .checks.handles import HandleReport, check_handles
 from .checks.history import HistoryReport, check_history
 from .checks.score import EXIT_CODES, Band, Verdict, aggregate
+from .checks.trademark import TrademarkReport, check_trademark
 from .checks.typosquat import TyposquatReport, check_typosquat
 
 _HANDLE_STATUS_STYLES = {
@@ -52,6 +53,23 @@ def _basic_table(basic: BasicReport) -> Table:
     table.add_row("hyphens / digits", f"{basic.hyphens} / {basic.digits}")
     table.add_row("IDN / punycode", "yes" if basic.has_idn else "no")
     table.add_row("syntax valid", "yes" if basic.is_valid_syntax else "NO")
+    return table
+
+
+def _trademark_table(tm: TrademarkReport) -> Table:
+    table = Table(title=f"Trademark search for '{tm.sld}'", show_header=True, header_style="bold")
+    table.add_column("Jurisdiction")
+    table.add_column("Status")
+    table.add_column("Matches")
+    table.add_column("Deeplink")
+    for j in tm.jurisdictions:
+        status_text = j.status if not j.detail else f"{j.status} ({j.detail})"
+        match_summary = (
+            f"{len(j.matches)} (exact: {sum(1 for m in j.matches if m.similarity == 'exact')})"
+            if j.matches
+            else "-"
+        )
+        table.add_row(j.jurisdiction.upper(), status_text, match_summary, j.deeplink or "-")
     return table
 
 
@@ -96,6 +114,7 @@ def _render_verdict(
     history: HistoryReport | None,
     handles: HandleReport | None,
     typo: TyposquatReport | None,
+    trademark: TrademarkReport | None,
     verdict: Verdict,
 ) -> None:
     console.print(
@@ -121,6 +140,11 @@ def _render_verdict(
         _emit_lines("Typosquat issues", typo.issues, style="bold red")
         _emit_lines("Typosquat notes", typo.notes, style="bold")
 
+    if trademark is not None:
+        console.print(_trademark_table(trademark))
+        _emit_lines("Trademark issues", trademark.issues, style="bold red")
+        _emit_lines("Trademark notes", trademark.notes, style="bold")
+
     if verdict.deductions:
         dt = Table(title="Score deductions", show_header=True, header_style="bold")
         dt.add_column("Reason")
@@ -136,6 +160,7 @@ def _payload(
     history: HistoryReport | None,
     handles: HandleReport | None,
     typo: TyposquatReport | None,
+    trademark: TrademarkReport | None,
     verdict: Verdict | None,
 ) -> dict[str, Any]:
     return {
@@ -154,6 +179,7 @@ def _payload(
         "history": None if history is None else asdict(history),
         "handles": None if handles is None else asdict(handles),
         "typosquat": None if typo is None else asdict(typo),
+        "trademark": None if trademark is None else asdict(trademark),
     }
 
 
@@ -186,12 +212,26 @@ def main(ctx: click.Context) -> None:
     default=False,
     help="Skip typosquat / brand-similarity check.",
 )
+@click.option(
+    "--check-trademark",
+    "check_trademark_flag",
+    is_flag=True,
+    default=False,
+    help="Also query USPTO / EUIPO trademark registries (slow; J-PlatPat surfaced as deeplink only).",
+)
+@click.option(
+    "--trademark-jurisdictions",
+    default="us,eu,jp",
+    help="Comma-separated jurisdictions for --check-trademark (default: us,eu,jp).",
+)
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON instead of a rich table.")
 def check(
     domain: str,
     no_history: bool,
     check_handles_flag: bool,
     no_typosquat: bool,
+    check_trademark_flag: bool,
+    trademark_jurisdictions: str,
     as_json: bool,
 ) -> None:
     """Run all enabled checks on DOMAIN and emit a verdict."""
@@ -199,12 +239,17 @@ def check(
     history = None if no_history else check_history(domain)
     handles = check_handles(domain) if check_handles_flag else None
     typo = None if no_typosquat else check_typosquat(domain)
-    verdict = aggregate(basic, history, typo)
+    trademark = (
+        check_trademark(domain, jurisdictions=[j.strip() for j in trademark_jurisdictions.split(",")])
+        if check_trademark_flag
+        else None
+    )
+    verdict = aggregate(basic, history, typo, trademark)
 
     if as_json:
-        _emit_json(_payload(domain, basic, history, handles, typo, verdict))
+        _emit_json(_payload(domain, basic, history, handles, typo, trademark, verdict))
     else:
-        _render_verdict(domain, basic, history, handles, typo, verdict)
+        _render_verdict(domain, basic, history, handles, typo, trademark, verdict)
 
     sys.exit(EXIT_CODES[verdict.band])
 
@@ -223,6 +268,23 @@ def history(domain: str, as_json: bool) -> None:
     console.print(f"first_seen={h.first_seen}  last_seen={h.last_seen}  span_days={h.age_days}")
     _emit_lines("Notes", h.notes)
     _emit_lines("Issues", h.issues, style="bold red")
+
+
+@main.command()
+@click.argument("domain")
+@click.option("--jurisdictions", default="us,eu,jp", help="Comma-separated jurisdictions (default: us,eu,jp).")
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
+def trademark(domain: str, jurisdictions: str, as_json: bool) -> None:
+    """Query trademark registries for marks similar to the SLD."""
+    selected = [j.strip() for j in jurisdictions.split(",")]
+    tm = check_trademark(domain, jurisdictions=selected)
+    if as_json:
+        _emit_json({"domain": tm.domain, "trademark": asdict(tm)})
+        return
+
+    console.print(_trademark_table(tm))
+    _emit_lines("Issues", tm.issues, style="bold red")
+    _emit_lines("Notes", tm.notes, style="bold")
 
 
 @main.command()

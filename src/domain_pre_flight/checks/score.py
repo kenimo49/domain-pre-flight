@@ -7,6 +7,7 @@ from enum import Enum
 
 from .basic import BasicReport, tld_risk_for
 from .history import HistoryReport
+from .trademark import TrademarkReport
 from .typosquat import TyposquatReport
 
 
@@ -107,16 +108,31 @@ def _typosquat_deductions(report: TyposquatReport) -> list[tuple[str, int]]:
     return [(f"shares bigram set with '{first.brand}'", 15)]
 
 
+def _trademark_deductions(report: TrademarkReport) -> list[tuple[str, int]]:
+    if not report.jurisdictions:
+        return []
+    exact = [j for j in report.jurisdictions if any(m.similarity == "exact" for m in j.matches)]
+    if exact:
+        return [(f"exact trademark match in {','.join(j.jurisdiction for j in exact)}", 50)]
+    similar_count = sum(1 for j in report.jurisdictions if j.matches)
+    if similar_count:
+        return [(f"similar trademarks found in {similar_count} jurisdiction(s)", 10)]
+    return []
+
+
 def aggregate(
     basic: BasicReport,
     history: HistoryReport | None = None,
     typosquat: TyposquatReport | None = None,
+    trademark: TrademarkReport | None = None,
 ) -> Verdict:
     deductions = _basic_deductions(basic)
     if history is not None:
         deductions.extend(_history_deductions(history))
     if typosquat is not None:
         deductions.extend(_typosquat_deductions(typosquat))
+    if trademark is not None:
+        deductions.extend(_trademark_deductions(trademark))
 
     total = min(100, sum(points for _, points in deductions))
     score = max(0, 100 - total)
