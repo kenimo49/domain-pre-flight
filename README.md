@@ -86,9 +86,9 @@ The features below are planned but **not yet implemented**. Order is rough; PRs 
 5. **Per-TLD default risk score (deeper)** — extend the TLD table to use live Spamhaus / SURBL feed data instead of the static table currently shipped.
 6. **Pronunciation / memorability heuristics (LLMO fitness)** — score how easily the domain can be dictated, spelled-back over voice, and recognised by AI search assistants. Non-trivial signal for any project that expects to be cited by LLM-driven discovery surfaces.
 
-### Opt-in — paid-API features (default OFF)
+### Opt-in — paid-API features (default OFF, not yet implemented)
 
-7. **Detailed backlink evaluation** — opt-in via `--enable-backlinks`. Reads referring-domain quality, anchor-text spam ratio, and historical link velocity from a paid backlink provider (Ahrefs / Majestic / Moz). Default OFF so the tool stays usable without keys; provider and credentials are configured via environment variables when enabled. Designed as a strict superset, not a replacement, for the free signals.
+7. **Detailed backlink evaluation** — referring-domain quality, anchor-text spam ratio, and historical link velocity from a paid provider (Ahrefs / Majestic / Moz). Will be exposed as an opt-in flag (planned name: `--enable-backlinks`) once the integration lands; provider and credentials will be configured via environment variables. Designed as a strict superset, not a replacement, for the free signals.
 
 ### Out of scope (for now)
 

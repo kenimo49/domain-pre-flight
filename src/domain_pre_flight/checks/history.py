@@ -1,11 +1,6 @@
-"""Past-content history checks via the Internet Archive Wayback Machine.
+"""Past-content history checks via the Internet Archive Wayback Machine CDX API.
 
-Free, no-auth public API:
-- https://archive.org/wayback/available?url=<domain>
-- https://web.archive.org/cdx/search/cdx?url=<domain>&output=json&limit=...
-
-We use both: ``available`` for a quick snapshot ping, and the CDX API for
-counting and bracketing the first/last archived timestamp.
+Three small queries (first + last + bounded count) instead of one large dump.
 """
 
 from __future__ import annotations
@@ -16,20 +11,23 @@ from typing import Any
 
 import requests
 
-WAYBACK_AVAILABLE = "https://archive.org/wayback/available"
 WAYBACK_CDX = "https://web.archive.org/cdx/search/cdx"
+DEFAULT_TIMEOUT = 10
+USER_AGENT = "domain-pre-flight/0.1 (+https://github.com/kenimo49/domain-pre-flight)"
 
-DEFAULT_TIMEOUT = 10  # seconds
+# Bounded count keeps payload modest while still covering the >=100 and
+# >=1000 scoring thresholds; anything beyond 2000 is treated as saturated.
+COUNT_LIMIT = 2000
 
 
 @dataclass
 class HistoryReport:
     domain: str
-    has_archive: bool
-    snapshot_count: int
-    first_seen: str | None
-    last_seen: str | None
-    age_days: int | None
+    has_archive: bool = False
+    snapshot_count: int = 0
+    first_seen: str | None = None
+    last_seen: str | None = None
+    age_days: int | None = None
     issues: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
@@ -42,79 +40,61 @@ def _parse_wayback_ts(ts: str) -> datetime | None:
         return None
 
 
-def check_history(domain: str, timeout: int = DEFAULT_TIMEOUT) -> HistoryReport:
-    """Query the Wayback Machine for archived snapshots of ``domain``."""
-    domain = domain.strip().lower().rstrip(".")
-    issues: list[str] = []
-    notes: list[str] = []
-    raw: dict[str, Any] = {}
+def _cdx_query(session: requests.Session, params: dict[str, str | int], timeout: int) -> Any:
+    resp = session.get(WAYBACK_CDX, params=params, timeout=timeout, headers={"User-Agent": USER_AGENT})
+    resp.raise_for_status()
+    return resp.json()
 
-    snapshot_count = 0
-    first_seen: str | None = None
-    last_seen: str | None = None
-    age_days: int | None = None
-    has_archive = False
+
+def check_history(domain: str, timeout: int = DEFAULT_TIMEOUT) -> HistoryReport:
+    domain = domain.strip().lower().rstrip(".")
+    report = HistoryReport(domain=domain)
+    session = requests.Session()
+    base = {"url": domain, "output": "json", "filter": "statuscode:200"}
 
     try:
-        cdx_resp = requests.get(
-            WAYBACK_CDX,
-            params={
-                "url": domain,
-                "output": "json",
-                "fl": "timestamp,statuscode,mimetype",
-                "limit": 5000,
-                "filter": "statuscode:200",
-            },
-            timeout=timeout,
-            headers={"User-Agent": "domain-pre-flight/0.1 (+https://github.com/kenimo49/domain-pre-flight)"},
-        )
-        cdx_resp.raise_for_status()
-        rows = cdx_resp.json()
-        # First row is the column header.
-        data_rows = rows[1:] if rows else []
-        snapshot_count = len(data_rows)
-        raw["cdx_rows_sampled"] = snapshot_count
+        first_rows = _cdx_query(session, {**base, "fl": "timestamp", "limit": 1}, timeout)
+        last_rows = _cdx_query(session, {**base, "fl": "timestamp", "limit": -1}, timeout)
+        first_data = first_rows[1:] if first_rows else []
+        last_data = last_rows[1:] if last_rows else []
 
-        if data_rows:
-            has_archive = True
-            timestamps = [r[0] for r in data_rows if r and r[0]]
-            if timestamps:
-                first_dt = _parse_wayback_ts(min(timestamps))
-                last_dt = _parse_wayback_ts(max(timestamps))
-                if first_dt:
-                    first_seen = first_dt.isoformat()
-                if last_dt:
-                    last_seen = last_dt.isoformat()
-                if first_dt and last_dt:
-                    age_days = (last_dt - first_dt).days
+        if first_data and last_data:
+            report.has_archive = True
+            first_dt = _parse_wayback_ts(first_data[0][0])
+            last_dt = _parse_wayback_ts(last_data[0][0])
+            if first_dt:
+                report.first_seen = first_dt.isoformat()
+            if last_dt:
+                report.last_seen = last_dt.isoformat()
+            if first_dt and last_dt:
+                report.age_days = (last_dt - first_dt).days
+
+            count_rows = _cdx_query(
+                session, {**base, "fl": "timestamp", "limit": COUNT_LIMIT}, timeout
+            )
+            report.snapshot_count = max(0, len(count_rows) - 1) if count_rows else 0
+            report.raw["count_saturated"] = report.snapshot_count >= COUNT_LIMIT
 
     except requests.RequestException as e:
-        issues.append(f"Wayback CDX query failed: {e.__class__.__name__}")
-        raw["cdx_error"] = str(e)
+        report.issues.append(f"Wayback CDX query failed: {e.__class__.__name__}")
+        report.raw["cdx_error"] = str(e)
+        return report
 
-    if has_archive:
-        if snapshot_count >= 100:
-            notes.append(
-                f"{snapshot_count}+ archived snapshots — domain has substantial prior content. "
+    if report.has_archive:
+        if report.snapshot_count >= 1000:
+            report.notes.append(
+                f"{report.snapshot_count}+ archived snapshots — substantial prior content. "
                 "Manually inspect early/late snapshots for topical coherence and abuse signals."
             )
-        elif snapshot_count >= 10:
-            notes.append(f"{snapshot_count} archived snapshots — moderate prior usage.")
+        elif report.snapshot_count >= 100:
+            report.notes.append(f"{report.snapshot_count} archived snapshots — moderate prior usage.")
         else:
-            notes.append(f"{snapshot_count} archived snapshots — minimal prior usage.")
-        if age_days and age_days > 365 * 5:
-            notes.append(f"archived span {age_days} days (>5y) — long-running history, audit carefully.")
+            report.notes.append(f"{report.snapshot_count} archived snapshots — minimal prior usage.")
+        if report.age_days and report.age_days > 365 * 5:
+            report.notes.append(
+                f"archived span {report.age_days} days (>5y) — long-running history, audit carefully."
+            )
     else:
-        notes.append("no Wayback snapshots — likely never used / very fresh.")
+        report.notes.append("no Wayback snapshots — likely never used / very fresh.")
 
-    return HistoryReport(
-        domain=domain,
-        has_archive=has_archive,
-        snapshot_count=snapshot_count,
-        first_seen=first_seen,
-        last_seen=last_seen,
-        age_days=age_days,
-        issues=issues,
-        notes=notes,
-        raw=raw,
-    )
+    return report

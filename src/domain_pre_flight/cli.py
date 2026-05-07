@@ -4,34 +4,37 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import asdict
+from typing import Any
 
 import click
 from rich.console import Console
 from rich.table import Table
 
-from .checks.basic import check_basic
-from .checks.history import check_history
-from .checks.score import aggregate
+from .checks.basic import BasicReport, check_basic
+from .checks.history import HistoryReport, check_history
+from .checks.score import EXIT_CODES, Band, Verdict, aggregate
 
 console = Console()
 
-
-def _band_style(band: str) -> str:
-    return {
-        "GREEN": "bold green",
-        "YELLOW": "bold yellow",
-        "ORANGE": "bold dark_orange",
-        "RED": "bold red",
-    }.get(band, "white")
+_BAND_STYLES: dict[Band, str] = {
+    Band.GREEN: "bold green",
+    Band.YELLOW: "bold yellow",
+    Band.ORANGE: "bold dark_orange",
+    Band.RED: "bold red",
+}
 
 
-def _render_verdict(domain: str, basic, history, verdict) -> None:
-    console.print(
-        f"\n[bold]{domain}[/bold]  →  "
-        f"[{_band_style(verdict.band)}]{verdict.band}[/]  "
-        f"score=[bold]{verdict.score}[/]/100  — {verdict.summary}\n"
-    )
+def _emit_lines(prefix_label: str, lines: list[str], style: str = "") -> None:
+    if not lines:
+        return
+    label = f"[{style}]{prefix_label}:[/]" if style else f"{prefix_label}:"
+    console.print(label)
+    for line in lines:
+        console.print(f"  • {line}")
 
+
+def _basic_table(basic: BasicReport) -> Table:
     table = Table(title="Basic checks", show_header=True, header_style="bold")
     table.add_column("Field")
     table.add_column("Value")
@@ -41,36 +44,35 @@ def _render_verdict(domain: str, basic, history, verdict) -> None:
     table.add_row("hyphens / digits", f"{basic.hyphens} / {basic.digits}")
     table.add_row("IDN / punycode", "yes" if basic.has_idn else "no")
     table.add_row("syntax valid", "yes" if basic.is_valid_syntax else "NO")
-    table.add_row("TLD risk score", str(basic.tld_risk_score))
-    console.print(table)
+    return table
 
-    if basic.issues:
-        console.print("[bold red]Issues:[/]")
-        for i in basic.issues:
-            console.print(f"  • {i}")
-    if basic.notes:
-        console.print("[bold]Notes:[/]")
-        for n in basic.notes:
-            console.print(f"  • {n}")
+
+def _history_table(history: HistoryReport) -> Table:
+    table = Table(title="History (Wayback Machine)", show_header=True, header_style="bold")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("has archive", "yes" if history.has_archive else "no")
+    table.add_row("snapshot count", str(history.snapshot_count))
+    table.add_row("first seen", history.first_seen or "-")
+    table.add_row("last seen", history.last_seen or "-")
+    table.add_row("archive span (days)", str(history.age_days) if history.age_days is not None else "-")
+    return table
+
+
+def _render_verdict(domain: str, basic: BasicReport, history: HistoryReport | None, verdict: Verdict) -> None:
+    console.print(
+        f"\n[bold]{domain}[/bold]  →  "
+        f"[{_BAND_STYLES[verdict.band]}]{verdict.band.value}[/]  "
+        f"score=[bold]{verdict.score}[/]/100  — {verdict.summary}\n"
+    )
+    console.print(_basic_table(basic))
+    _emit_lines("Issues", basic.issues, style="bold red")
+    _emit_lines("Notes", basic.notes, style="bold")
 
     if history is not None:
-        ht = Table(title="History (Wayback Machine)", show_header=True, header_style="bold")
-        ht.add_column("Field")
-        ht.add_column("Value")
-        ht.add_row("has archive", "yes" if history.has_archive else "no")
-        ht.add_row("snapshot count", str(history.snapshot_count))
-        ht.add_row("first seen", history.first_seen or "-")
-        ht.add_row("last seen", history.last_seen or "-")
-        ht.add_row("archive span (days)", str(history.age_days) if history.age_days is not None else "-")
-        console.print(ht)
-        if history.issues:
-            console.print("[bold red]History issues:[/]")
-            for i in history.issues:
-                console.print(f"  • {i}")
-        if history.notes:
-            console.print("[bold]History notes:[/]")
-            for n in history.notes:
-                console.print(f"  • {n}")
+        console.print(_history_table(history))
+        _emit_lines("History issues", history.issues, style="bold red")
+        _emit_lines("History notes", history.notes, style="bold")
 
     if verdict.deductions:
         dt = Table(title="Score deductions", show_header=True, header_style="bold")
@@ -81,42 +83,26 @@ def _render_verdict(domain: str, basic, history, verdict) -> None:
         console.print(dt)
 
 
-def _to_dict(domain, basic, history, verdict) -> dict:
+def _payload(domain: str, basic: BasicReport, history: HistoryReport | None, verdict: Verdict | None) -> dict[str, Any]:
     return {
         "domain": domain,
-        "verdict": {
-            "score": verdict.score,
-            "band": verdict.band,
-            "summary": verdict.summary,
-            "deductions": [{"reason": r, "points": p} for r, p in verdict.deductions],
-        },
-        "basic": {
-            "sld": basic.sld,
-            "tld": basic.tld,
-            "length": basic.length,
-            "label_length": basic.label_length,
-            "hyphens": basic.hyphens,
-            "digits": basic.digits,
-            "has_idn": basic.has_idn,
-            "is_valid_syntax": basic.is_valid_syntax,
-            "tld_risk_score": basic.tld_risk_score,
-            "issues": basic.issues,
-            "notes": basic.notes,
-        },
-        "history": (
+        "verdict": (
             None
-            if history is None
+            if verdict is None
             else {
-                "has_archive": history.has_archive,
-                "snapshot_count": history.snapshot_count,
-                "first_seen": history.first_seen,
-                "last_seen": history.last_seen,
-                "age_days": history.age_days,
-                "issues": history.issues,
-                "notes": history.notes,
+                "score": verdict.score,
+                "band": verdict.band.value,
+                "summary": verdict.summary,
+                "deductions": [{"reason": r, "points": p} for r, p in verdict.deductions],
             }
         ),
+        "basic": {**asdict(basic), "length": basic.length},
+        "history": None if history is None else asdict(history),
     }
+
+
+def _emit_json(payload: dict[str, Any]) -> None:
+    click.echo(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 @click.group(invoke_without_command=True)
@@ -130,93 +116,51 @@ def main(ctx: click.Context) -> None:
 
 @main.command()
 @click.argument("domain")
-@click.option(
-    "--no-history",
-    is_flag=True,
-    default=False,
-    help="Skip Wayback Machine history lookup (offline-only run).",
-)
-@click.option(
-    "--enable-backlinks",
-    is_flag=True,
-    default=False,
-    help="(ROADMAP — not yet implemented) Enable detailed backlink evaluation. Requires paid API keys via env vars; opt-in.",
-)
-@click.option(
-    "--json",
-    "as_json",
-    is_flag=True,
-    default=False,
-    help="Output JSON instead of a rich table.",
-)
-def check(domain: str, no_history: bool, enable_backlinks: bool, as_json: bool) -> None:
+@click.option("--no-history", is_flag=True, default=False, help="Skip Wayback Machine history lookup.")
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON instead of a rich table.")
+def check(domain: str, no_history: bool, as_json: bool) -> None:
     """Run all enabled checks on DOMAIN and emit a verdict."""
-    if enable_backlinks:
-        click.echo(
-            "warning: --enable-backlinks is reserved for a future release; ignored for now.",
-            err=True,
-        )
-
     basic = check_basic(domain)
     history = None if no_history else check_history(domain)
     verdict = aggregate(basic, history)
 
     if as_json:
-        click.echo(json.dumps(_to_dict(domain, basic, history, verdict), ensure_ascii=False, indent=2))
+        _emit_json(_payload(domain, basic, history, verdict))
     else:
         _render_verdict(domain, basic, history, verdict)
 
-    # Exit code 0 GREEN/YELLOW, 1 ORANGE, 2 RED — useful for CI gating.
-    sys.exit({"GREEN": 0, "YELLOW": 0, "ORANGE": 1, "RED": 2}[verdict.band])
+    sys.exit(EXIT_CODES[verdict.band])
 
 
 @main.command()
 @click.argument("domain")
-@click.option("--json", "as_json", is_flag=True, default=False, help="Output JSON.")
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
 def history(domain: str, as_json: bool) -> None:
     """Show only the Wayback Machine history for DOMAIN."""
     h = check_history(domain)
     if as_json:
-        click.echo(
-            json.dumps(
-                {
-                    "domain": h.domain,
-                    "has_archive": h.has_archive,
-                    "snapshot_count": h.snapshot_count,
-                    "first_seen": h.first_seen,
-                    "last_seen": h.last_seen,
-                    "age_days": h.age_days,
-                    "issues": h.issues,
-                    "notes": h.notes,
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
+        _emit_json({"domain": h.domain, "history": asdict(h)})
         return
 
     console.print(f"\n[bold]{h.domain}[/]  archived={h.has_archive}  snapshots={h.snapshot_count}")
     console.print(f"first_seen={h.first_seen}  last_seen={h.last_seen}  span_days={h.age_days}")
-    for n in h.notes:
-        console.print(f"  • {n}")
-    for i in h.issues:
-        console.print(f"  ! {i}")
+    _emit_lines("Notes", h.notes)
+    _emit_lines("Issues", h.issues, style="bold red")
 
 
 @main.command()
 @click.argument("domain")
-def basic(domain: str) -> None:
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
+def basic(domain: str, as_json: bool) -> None:
     """Run only offline structural checks on DOMAIN."""
     b = check_basic(domain)
-    console.print(
-        f"\n[bold]{b.domain}[/]  sld={b.sld}  tld={b.tld}  "
-        f"len={b.length}  hyphens={b.hyphens}  digits={b.digits}  "
-        f"idn={'yes' if b.has_idn else 'no'}  tld_risk={b.tld_risk_score}"
-    )
-    for n in b.notes:
-        console.print(f"  • {n}")
-    for i in b.issues:
-        console.print(f"  ! {i}")
+    if as_json:
+        _emit_json({"domain": b.domain, "basic": {**asdict(b), "length": b.length}})
+        return
+
+    console.print(_basic_table(b))
+    _emit_lines("Issues", b.issues, style="bold red")
+    _emit_lines("Notes", b.notes, style="bold")
 
 
 if __name__ == "__main__":

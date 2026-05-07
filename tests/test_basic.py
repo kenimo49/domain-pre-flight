@@ -6,8 +6,11 @@ def test_parse_domain_simple():
 
 
 def test_parse_domain_subdomain():
-    # parse_domain only splits the last label; SLD = everything before
-    assert parse_domain("foo.example.com") == ("foo.example", "com")
+    assert parse_domain("foo.example.com") == ("example", "com")
+
+
+def test_parse_domain_multi_label_tld():
+    assert parse_domain("example.co.jp") == ("example", "co.jp")
 
 
 def test_parse_domain_no_tld():
@@ -22,16 +25,13 @@ def test_basic_clean_com():
     assert r.hyphens == 0
     assert r.digits == 0
     assert not r.has_idn
-    assert r.tld_risk_score == 0
+    assert r.length == 11
 
 
 def test_basic_high_risk_tld():
     r = check_basic("foo.xyz")
     assert r.tld == "xyz"
-    assert r.tld_risk_score >= 20
-    assert any("xyz" in note or "xyz" in issue for note in r.notes for issue in r.issues) or any(
-        "xyz" in n for n in r.notes
-    ) or any("xyz" in i for i in r.issues)
+    assert any("xyz" in s for s in r.notes + r.issues)
 
 
 def test_basic_hyphens_and_digits():

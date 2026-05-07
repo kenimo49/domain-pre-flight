@@ -1,45 +1,64 @@
-"""Aggregate scoring across check modules.
-
-Score is a 0-100 number; verdict bands:
-  90-100 GREEN  — go ahead
-  70-89  YELLOW — usable, watch the listed concerns
-  40-69  ORANGE — acceptable only with mitigation
-   0-39  RED    — do not register without manual review
-"""
+"""Aggregate scoring across check modules."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 
-from .basic import BasicReport
+from .basic import BasicReport, tld_risk_for
 from .history import HistoryReport
+
+
+class Band(str, Enum):
+    GREEN = "GREEN"
+    YELLOW = "YELLOW"
+    ORANGE = "ORANGE"
+    RED = "RED"
+
+
+# Score thresholds, in descending order. First match wins.
+_BAND_THRESHOLDS: list[tuple[int, Band]] = [
+    (90, Band.GREEN),
+    (70, Band.YELLOW),
+    (40, Band.ORANGE),
+    (0, Band.RED),
+]
+
+_SUMMARIES: dict[Band, str] = {
+    Band.GREEN: "Looks clean. Proceed.",
+    Band.YELLOW: "Usable; review the listed concerns.",
+    Band.ORANGE: "Acceptable only with mitigation. Investigate flagged items.",
+    Band.RED: "Do not register without manual review.",
+}
+
+EXIT_CODES: dict[Band, int] = {
+    Band.GREEN: 0,
+    Band.YELLOW: 0,
+    Band.ORANGE: 1,
+    Band.RED: 2,
+}
 
 
 @dataclass
 class Verdict:
     score: int
-    band: str  # GREEN / YELLOW / ORANGE / RED
+    band: Band
     summary: str
     deductions: list[tuple[str, int]] = field(default_factory=list)
 
 
-def _band(score: int) -> str:
-    if score >= 90:
-        return "GREEN"
-    if score >= 70:
-        return "YELLOW"
-    if score >= 40:
-        return "ORANGE"
-    return "RED"
+def _band_for(score: int) -> Band:
+    for threshold, band in _BAND_THRESHOLDS:
+        if score >= threshold:
+            return band
+    return Band.RED
 
 
-def score_basic(report: BasicReport) -> tuple[int, list[tuple[str, int]]]:
-    """Return (deduction_total, [(reason, points), ...]) for basic checks."""
-    deductions: list[tuple[str, int]] = []
-
+def _basic_deductions(report: BasicReport) -> list[tuple[str, int]]:
     if not report.is_valid_syntax:
-        deductions.append(("invalid hostname syntax", 100))
-        return 100, deductions
+        return [("invalid hostname syntax", 100)]
+
+    deductions: list[tuple[str, int]] = []
 
     if report.label_length < 3:
         deductions.append(("SLD <3 chars (premium/reserved)", 15))
@@ -61,48 +80,24 @@ def score_basic(report: BasicReport) -> tuple[int, list[tuple[str, int]]]:
     if report.has_idn:
         deductions.append(("IDN / punycode (phishing perception)", 10))
 
-    deductions.append((f".{report.tld} TLD risk", report.tld_risk_score))
-
-    total = sum(d for _, d in deductions)
-    return total, deductions
+    deductions.append((f".{report.tld} TLD risk", tld_risk_for(report.tld)))
+    return deductions
 
 
-def score_history(report: HistoryReport) -> tuple[int, list[tuple[str, int]]]:
-    """Return (deduction_total, deductions). Only deducts for high-risk patterns;
-    a clean history with snapshots is *not* penalised here.
-    """
-    deductions: list[tuple[str, int]] = []
+def _history_deductions(report: HistoryReport) -> list[tuple[str, int]]:
     if report.snapshot_count >= 1000:
-        deductions.append(
-            ("very large prior snapshot count — manual content audit required", 25)
-        )
-    elif report.snapshot_count >= 100:
-        deductions.append(("substantial prior content — audit before adopting topic", 10))
-    return sum(d for _, d in deductions), deductions
+        return [("very large prior snapshot count — manual content audit required", 25)]
+    if report.snapshot_count >= 100:
+        return [("substantial prior content — audit before adopting topic", 10)]
+    return []
 
 
 def aggregate(basic: BasicReport, history: HistoryReport | None = None) -> Verdict:
-    """Combine sub-reports into a single verdict."""
-    deductions: list[tuple[str, int]] = []
-
-    basic_deduction, basic_items = score_basic(basic)
-    deductions.extend(basic_items)
-
+    deductions = _basic_deductions(basic)
     if history is not None:
-        _, history_items = score_history(history)
-        deductions.extend(history_items)
+        deductions.extend(_history_deductions(history))
 
-    total_deduction = min(100, sum(d for _, d in deductions))
-    score = max(0, 100 - total_deduction)
-    band = _band(score)
-
-    if band == "GREEN":
-        summary = "Looks clean. Proceed."
-    elif band == "YELLOW":
-        summary = "Usable; review the listed concerns."
-    elif band == "ORANGE":
-        summary = "Acceptable only with mitigation. Investigate flagged items."
-    else:
-        summary = "Do not register without manual review."
-
-    return Verdict(score=score, band=band, summary=summary, deductions=deductions)
+    total = min(100, sum(points for _, points in deductions))
+    score = max(0, 100 - total)
+    band = _band_for(score)
+    return Verdict(score=score, band=band, summary=_SUMMARIES[band], deductions=deductions)
