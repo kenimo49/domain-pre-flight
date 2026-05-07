@@ -21,8 +21,11 @@ Bands:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 VOWELS = set("aeiouy")
+
+LlmoBand = Literal["excellent", "good", "ok", "poor"]
 
 
 @dataclass
@@ -34,7 +37,7 @@ class LlmoReport:
     length_score: int = 0
     repeats_score: int = 0
     fitness: int = 0
-    band: str = "poor"  # excellent / good / ok / poor
+    band: LlmoBand = "poor"
     issues: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
@@ -70,7 +73,7 @@ def _vowel_ratio(name: str) -> float:
     return sum(1 for c in letters if c in VOWELS) / len(letters)
 
 
-def _band_for(score: int) -> str:
+def _band_for(score: int) -> LlmoBand:
     if score >= 16:
         return "excellent"
     if score >= 11:
@@ -82,10 +85,9 @@ def _band_for(score: int) -> str:
 
 def check_llmo(domain: str) -> LlmoReport:
     """Score the SLD's voice/AI-friendliness on a 0-20 scale."""
-    from .basic import parse_domain
+    from .basic import normalise
 
-    domain = domain.strip().lower().rstrip(".")
-    sld, _ = parse_domain(domain)
+    domain, sld, _ = normalise(domain)
     report = LlmoReport(domain=domain, sld=sld)
 
     if not sld:

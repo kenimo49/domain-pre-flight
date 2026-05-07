@@ -81,15 +81,21 @@ def check_history(domain: str, timeout: int = DEFAULT_TIMEOUT) -> HistoryReport:
         return report
 
     if report.has_archive:
+        saturated = bool(report.raw.get("count_saturated"))
+        count_str = f"{report.snapshot_count}{'+' if saturated else ''}"
         if report.snapshot_count >= 1000:
             report.notes.append(
-                f"{report.snapshot_count}+ archived snapshots — substantial prior content. "
+                f"{count_str} archived snapshots — substantial prior content. "
                 "Manually inspect early/late snapshots for topical coherence and abuse signals."
             )
         elif report.snapshot_count >= 100:
-            report.notes.append(f"{report.snapshot_count} archived snapshots — moderate prior usage.")
+            report.notes.append(f"{count_str} archived snapshots — moderate prior usage.")
         else:
-            report.notes.append(f"{report.snapshot_count} archived snapshots — minimal prior usage.")
+            report.notes.append(f"{count_str} archived snapshots — minimal prior usage.")
+        if saturated:
+            report.notes.append(
+                f"snapshot count saturated at {COUNT_LIMIT}; actual count is higher."
+            )
         if report.age_days and report.age_days > 365 * 5:
             report.notes.append(
                 f"archived span {report.age_days} days (>5y) — long-running history, audit carefully."

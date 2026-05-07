@@ -78,6 +78,17 @@ def parse_domain(domain: str) -> tuple[str, str]:
     return parts.domain, parts.suffix
 
 
+def normalise(domain: str) -> tuple[str, str, str]:
+    """Normalise a raw domain string and return ``(domain, sld, tld)``.
+
+    Used by every check module's entry point to keep the strip/lower/rstrip
+    behaviour identical across modules.
+    """
+    domain = domain.strip().lower().rstrip(".")
+    sld, tld = parse_domain(domain)
+    return domain, sld, tld
+
+
 def check_basic(domain: str) -> BasicReport:
     domain = domain.strip().lower().rstrip(".")
     sld, tld = parse_domain(domain)

@@ -230,6 +230,21 @@ def _emit_json(payload: dict[str, Any]) -> None:
     click.echo(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
+def _emit_single(section: str, report: Any, as_json: bool) -> bool:
+    """Emit JSON for a single-section subcommand; return True if JSON was emitted."""
+    if as_json:
+        _emit_json({"domain": report.domain, section: asdict(report)})
+        return True
+    return False
+
+
+def _split_csv(s: str | None) -> list[str] | None:
+    if not s:
+        return None
+    parts = [x.strip() for x in s.split(",") if x.strip()]
+    return parts or None
+
+
 @click.group(invoke_without_command=True)
 @click.version_option(package_name="domain-pre-flight")
 @click.pass_context
@@ -303,14 +318,14 @@ def check(
     handles = check_handles(domain) if check_handles_flag else None
     typo = None if no_typosquat else check_typosquat(domain)
     trademark = (
-        check_trademark(domain, jurisdictions=[j.strip() for j in trademark_jurisdictions.split(",")])
+        check_trademark(domain, jurisdictions=_split_csv(trademark_jurisdictions))
         if check_trademark_flag
         else None
     )
     semantics = (
         None
         if no_semantics
-        else check_semantics(domain, languages=[l.strip() for l in languages.split(",")])
+        else check_semantics(domain, languages=_split_csv(languages))
     )
     llmo = None if no_llmo else check_llmo(domain)
     verdict = aggregate(basic, history, typo, trademark, semantics, llmo)
@@ -329,8 +344,7 @@ def check(
 def history(domain: str, as_json: bool) -> None:
     """Show only the Wayback Machine history for DOMAIN."""
     h = check_history(domain)
-    if as_json:
-        _emit_json({"domain": h.domain, "history": asdict(h)})
+    if _emit_single("history", h, as_json):
         return
 
     console.print(f"\n[bold]{h.domain}[/]  archived={h.has_archive}  snapshots={h.snapshot_count}")
@@ -344,14 +358,13 @@ def history(domain: str, as_json: bool) -> None:
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
 def llmo(domain: str, as_json: bool) -> None:
     """Show only the LLMO fitness (pronunciation / memorability) for DOMAIN."""
-    l = check_llmo(domain)
-    if as_json:
-        _emit_json({"domain": l.domain, "llmo": asdict(l)})
+    report = check_llmo(domain)
+    if _emit_single("llmo", report, as_json):
         return
 
-    console.print(_llmo_table(l))
-    _emit_lines("Issues", l.issues, style="bold red")
-    _emit_lines("Notes", l.notes, style="bold")
+    console.print(_llmo_table(report))
+    _emit_lines("Issues", report.issues, style="bold red")
+    _emit_lines("Notes", report.notes, style="bold")
 
 
 @main.command()
@@ -364,15 +377,13 @@ def llmo(domain: str, as_json: bool) -> None:
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
 def semantics(domain: str, languages: str, as_json: bool) -> None:
     """Scan the SLD for negative-meaning terms across major languages."""
-    selected = [l.strip() for l in languages.split(",")]
-    s = check_semantics(domain, languages=selected)
-    if as_json:
-        _emit_json({"domain": s.domain, "semantics": asdict(s)})
+    report = check_semantics(domain, languages=_split_csv(languages))
+    if _emit_single("semantics", report, as_json):
         return
 
-    console.print(_semantics_table(s))
-    _emit_lines("Issues", s.issues, style="bold red")
-    _emit_lines("Notes", s.notes, style="bold")
+    console.print(_semantics_table(report))
+    _emit_lines("Issues", report.issues, style="bold red")
+    _emit_lines("Notes", report.notes, style="bold")
 
 
 @main.command()
@@ -381,15 +392,13 @@ def semantics(domain: str, languages: str, as_json: bool) -> None:
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
 def trademark(domain: str, jurisdictions: str, as_json: bool) -> None:
     """Query trademark registries for marks similar to the SLD."""
-    selected = [j.strip() for j in jurisdictions.split(",")]
-    tm = check_trademark(domain, jurisdictions=selected)
-    if as_json:
-        _emit_json({"domain": tm.domain, "trademark": asdict(tm)})
+    report = check_trademark(domain, jurisdictions=_split_csv(jurisdictions))
+    if _emit_single("trademark", report, as_json):
         return
 
-    console.print(_trademark_table(tm))
-    _emit_lines("Issues", tm.issues, style="bold red")
-    _emit_lines("Notes", tm.notes, style="bold")
+    console.print(_trademark_table(report))
+    _emit_lines("Issues", report.issues, style="bold red")
+    _emit_lines("Notes", report.notes, style="bold")
 
 
 @main.command()
@@ -397,14 +406,13 @@ def trademark(domain: str, jurisdictions: str, as_json: bool) -> None:
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
 def typosquat(domain: str, as_json: bool) -> None:
     """Show only the typosquat / brand-similarity check for DOMAIN."""
-    t = check_typosquat(domain)
-    if as_json:
-        _emit_json({"domain": t.domain, "typosquat": asdict(t)})
+    report = check_typosquat(domain)
+    if _emit_single("typosquat", report, as_json):
         return
 
-    console.print(_typosquat_table(t))
-    _emit_lines("Issues", t.issues, style="bold red")
-    _emit_lines("Notes", t.notes, style="bold")
+    console.print(_typosquat_table(report))
+    _emit_lines("Issues", report.issues, style="bold red")
+    _emit_lines("Notes", report.notes, style="bold")
 
 
 @main.command()
@@ -417,14 +425,12 @@ def typosquat(domain: str, as_json: bool) -> None:
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
 def handles(domain: str, platforms: str | None, as_json: bool) -> None:
     """Check same-name handle availability across developer platforms and social networks."""
-    selected = [p.strip() for p in platforms.split(",")] if platforms else None
-    h = check_handles(domain, platforms=selected)
-    if as_json:
-        _emit_json({"domain": h.domain, "handles": asdict(h)})
+    report = check_handles(domain, platforms=_split_csv(platforms))
+    if _emit_single("handles", report, as_json):
         return
 
-    console.print(_handles_table(h))
-    _emit_lines("Notes", h.notes, style="bold")
+    console.print(_handles_table(report))
+    _emit_lines("Notes", report.notes, style="bold")
 
 
 @main.command()

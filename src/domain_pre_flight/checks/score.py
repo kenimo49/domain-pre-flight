@@ -20,7 +20,6 @@ class Band(str, Enum):
     RED = "RED"
 
 
-# Score thresholds, in descending order. First match wins.
 _BAND_THRESHOLDS: list[tuple[int, Band]] = [
     (90, Band.GREEN),
     (70, Band.YELLOW),

@@ -20,11 +20,16 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 DEFAULT_TIMEOUT = 12
 USER_AGENT = "domain-pre-flight/0.1 (+https://github.com/kenimo49/domain-pre-flight)"
 
 JurisdictionStatus = Literal["ok", "lookup_failed", "not_supported"]
+
+
+Similarity = Literal["exact", "similar"]
 
 
 @dataclass
@@ -34,7 +39,7 @@ class TrademarkMatch:
     status_text: str = ""
     serial: str = ""
     classes: list[str] = field(default_factory=list)
-    similarity: str = "exact"  # "exact" | "similar"
+    similarity: Similarity = "exact"
 
 
 @dataclass
@@ -65,6 +70,18 @@ class TrademarkReport:
 def _session() -> requests.Session:
     s = requests.Session()
     s.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
+    # 5xx responses from public registries are common at peak load; one retry
+    # with backoff turns a flaky lookup into a soft success without doubling
+    # the worst-case wait for a real outage.
+    retry = Retry(
+        total=2,
+        backoff_factor=0.5,
+        status_forcelist=[502, 503, 504],
+        allowed_methods=frozenset(["GET", "POST"]),
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    s.mount("https://", adapter)
+    s.mount("http://", adapter)
     return s
 
 
@@ -176,19 +193,22 @@ _QUERIES = {
     "jp": _query_jplatpat,
 }
 
+# J-PlatPat resolves synchronously (no public API, deeplink only); keeping it
+# out of the executor leaves the pool sized to actual network workers.
+_NETWORK_QUERIES = frozenset({"us", "eu"})
+
 
 def check_trademark(
     domain: str,
     *,
     jurisdictions: list[str] | None = None,
     timeout: int = DEFAULT_TIMEOUT,
-    max_workers: int = 3,
+    max_workers: int = 2,
 ) -> TrademarkReport:
     """Fan out trademark queries across the requested jurisdictions."""
-    from .basic import parse_domain
+    from .basic import normalise
 
-    domain = domain.strip().lower().rstrip(".")
-    sld, _ = parse_domain(domain)
+    domain, sld, _ = normalise(domain)
     report = TrademarkReport(domain=domain, sld=sld)
 
     if not sld:
@@ -202,10 +222,18 @@ def check_trademark(
     selected = [j for j in selected if j in _QUERIES]
 
     session = _session()
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = [pool.submit(_QUERIES[j], sld, session, timeout) for j in selected]
-        for f in futures:
-            report.jurisdictions.append(f.result())
+    network_jurisdictions = [j for j in selected if j in _NETWORK_QUERIES]
+    sync_jurisdictions = [j for j in selected if j not in _NETWORK_QUERIES]
+
+    if network_jurisdictions:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [
+                pool.submit(_QUERIES[j], sld, session, timeout) for j in network_jurisdictions
+            ]
+            for f in futures:
+                report.jurisdictions.append(f.result())
+    for j in sync_jurisdictions:
+        report.jurisdictions.append(_QUERIES[j](sld, session, timeout))
 
     report.jurisdictions.sort(key=lambda j: j.jurisdiction)
 

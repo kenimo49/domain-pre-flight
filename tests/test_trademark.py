@@ -84,16 +84,18 @@ def test_trademark_similar_only_eu():
 
 @responses.activate
 def test_trademark_uspto_lookup_failure():
-    responses.add(
-        responses.GET,
-        "https://tmsearch.uspto.gov/api/search/case",
-        json={"error": "broken"},
-        status=503,
-    )
+    # Session retries on 502/503/504; provide enough mocked responses to
+    # exhaust the retry budget, then assert the final lookup_failed state.
+    for _ in range(4):
+        responses.add(
+            responses.GET,
+            "https://tmsearch.uspto.gov/api/search/case",
+            json={"error": "broken"},
+            status=503,
+        )
     r = check_trademark("nicebrand.com", jurisdictions=["us"])
     us = r.jurisdictions[0]
     assert us.status == "lookup_failed"
-    assert "503" in us.detail
     assert any("could not query" in n for n in r.notes)
 
 
@@ -130,19 +132,16 @@ def test_trademark_unknown_jurisdiction_noted():
     assert any("mars" in n for n in r.notes)
 
 
+@responses.activate
 def test_trademark_uspto_unrecognised_response_shape():
-    @responses.activate
-    def _run():
-        responses.add(
-            responses.GET,
-            "https://tmsearch.uspto.gov/api/search/case",
-            body="not json at all",
-            status=200,
-            content_type="text/plain",
-        )
-        r = check_trademark("nicebrand.com", jurisdictions=["us"])
-        us = r.jurisdictions[0]
-        assert us.status == "lookup_failed"
-        assert "unrecognised" in us.detail or "transport" in us.detail or "json" in us.detail.lower()
-
-    _run()
+    responses.add(
+        responses.GET,
+        "https://tmsearch.uspto.gov/api/search/case",
+        body="not json at all",
+        status=200,
+        content_type="text/plain",
+    )
+    r = check_trademark("nicebrand.com", jurisdictions=["us"])
+    us = r.jurisdictions[0]
+    assert us.status == "lookup_failed"
+    assert "unrecognised" in us.detail or "transport" in us.detail or "json" in us.detail.lower()

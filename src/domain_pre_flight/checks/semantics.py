@@ -68,13 +68,13 @@ def _load_language(lang: str) -> list[tuple[str, Severity]]:
 
 def check_semantics(
     domain: str,
+    *,
     languages: list[str] | None = None,
 ) -> SemanticsReport:
     """Scan the SLD for negative-meaning terms in the requested languages."""
-    from .basic import parse_domain
+    from .basic import normalise
 
-    domain = domain.strip().lower().rstrip(".")
-    sld, _ = parse_domain(domain)
+    domain, sld, _ = normalise(domain)
     selected = languages if languages else list(SUPPORTED_LANGUAGES)
     report = SemanticsReport(domain=domain, sld=sld, languages=selected)
 

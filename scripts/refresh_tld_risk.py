@@ -28,25 +28,22 @@ import argparse
 import datetime as dt
 import json
 import sys
+import sys
 from pathlib import Path
-
-import requests
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TARGET = REPO_ROOT / "src" / "domain_pre_flight" / "data" / "tld_risk.json"
 USER_AGENT = "domain-pre-flight-refresh/0.1 (+https://github.com/kenimo49/domain-pre-flight)"
 
+# Importing the package is safe even when tld_risk.json is missing — basic.py
+# falls back to its embedded baseline. Sharing the table avoids two copies
+# drifting apart.
+sys.path.insert(0, str(REPO_ROOT / "src"))
+from domain_pre_flight.checks.basic import _FALLBACK_TLD_RISK  # noqa: E402
+
 
 def _baseline() -> dict[str, int]:
-    return {
-        "com": 0, "net": 0, "org": 0, "io": 0, "dev": 0, "ai": 0, "co": 5,
-        "jp": 0, "uk": 0, "de": 0, "fr": 0, "us": 5,
-        "app": 5, "blog": 5, "tech": 10,
-        "site": 15, "store": 15, "online": 20, "shop": 15,
-        "xyz": 30, "top": 40, "buzz": 40, "click": 50, "link": 30,
-        "loan": 60, "work": 35, "icu": 50, "live": 25,
-        "cf": 70, "ga": 70, "ml": 70, "tk": 70, "gq": 70,
-    }
+    return dict(_FALLBACK_TLD_RISK)
 
 
 def _try_fetch_interisle(timeout: int = 15) -> dict[str, int] | None:
@@ -82,9 +79,6 @@ def main() -> int:
                "Manual curation (kenimo49/domain-pre-flight maintainers)"]
 
     risk = _baseline()
-
-    session = requests.Session()
-    session.headers.update({"User-Agent": USER_AGENT})
 
     interisle = _try_fetch_interisle()
     if interisle:

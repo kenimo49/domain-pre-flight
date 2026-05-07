@@ -108,7 +108,6 @@ def check_instagram(name: str, timeout: int = DEFAULT_TIMEOUT) -> HandleResult:
     return HandleResult("instagram", "unknown", "bot protection — verify in browser")
 
 
-# Public registry of platform checkers. Tests can monkeypatch this.
 PLATFORM_CHECKS: dict[str, Callable[[str, int], HandleResult]] = {
     "github": check_github,
     "npm": check_npm,
@@ -129,10 +128,9 @@ def check_handles(
 
     The SLD (left-most label of the domain) is used as the candidate handle.
     """
-    from .basic import parse_domain
+    from .basic import normalise
 
-    domain = domain.strip().lower().rstrip(".")
-    sld, _ = parse_domain(domain)
+    domain, sld, _ = normalise(domain)
     report = HandleReport(domain=domain, sld=sld)
 
     if not sld:
