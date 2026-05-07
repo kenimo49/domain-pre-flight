@@ -16,6 +16,7 @@ from .checks.handles import HandleReport, check_handles
 from .checks.history import HistoryReport, check_history
 from .checks.idn_homograph import HomographReport, check_idn_homograph
 from .checks.llmo import LlmoReport, check_llmo
+from .checks.rdap import RdapReport, check_rdap
 from .checks.score import EXIT_CODES, Band, Verdict, aggregate
 from .checks.semantics import SUPPORTED_LANGUAGES, SemanticsReport, check_semantics
 from .checks.trademark import TrademarkReport, check_trademark
@@ -56,6 +57,20 @@ def _basic_table(basic: BasicReport) -> Table:
     table.add_row("hyphens / digits", f"{basic.hyphens} / {basic.digits}")
     table.add_row("IDN / punycode", "yes" if basic.has_idn else "no")
     table.add_row("syntax valid", "yes" if basic.is_valid_syntax else "NO")
+    return table
+
+
+def _rdap_table(r: RdapReport) -> Table:
+    table = Table(title=f"RDAP for '{r.domain}'", show_header=True, header_style="bold")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("status", f"{r.status}{f' ({r.detail})' if r.detail else ''}")
+    table.add_row("created", r.created_at or "-")
+    table.add_row("expires", r.expires_at or "-")
+    table.add_row("age (days)", str(r.domain_age_days) if r.domain_age_days is not None else "-")
+    table.add_row("days to expiry", str(r.days_to_expiry) if r.days_to_expiry is not None else "-")
+    table.add_row("registrar", r.registrar or "-")
+    table.add_row("registry status", ", ".join(r.domain_status) or "-")
     return table
 
 
@@ -158,6 +173,7 @@ def _render_verdict(
     semantics: SemanticsReport | None,
     llmo: LlmoReport | None,
     homograph: HomographReport | None,
+    rdap: RdapReport | None,
     verdict: Verdict,
 ) -> None:
     console.print(
@@ -203,6 +219,11 @@ def _render_verdict(
         _emit_lines("Homograph issues", homograph.issues, style="bold red")
         _emit_lines("Homograph notes", homograph.notes, style="bold")
 
+    if rdap is not None:
+        console.print(_rdap_table(rdap))
+        _emit_lines("RDAP issues", rdap.issues, style="bold red")
+        _emit_lines("RDAP notes", rdap.notes, style="bold")
+
     if verdict.deductions:
         dt = Table(title="Score deductions", show_header=True, header_style="bold")
         dt.add_column("Reason")
@@ -222,6 +243,7 @@ def _payload(
     semantics: SemanticsReport | None,
     llmo: LlmoReport | None,
     homograph: HomographReport | None,
+    rdap: RdapReport | None,
     verdict: Verdict | None,
 ) -> dict[str, Any]:
     return {
@@ -244,6 +266,7 @@ def _payload(
         "semantics": None if semantics is None else asdict(semantics),
         "llmo": None if llmo is None else asdict(llmo),
         "homograph": None if homograph is None else asdict(homograph),
+        "rdap": None if rdap is None else asdict(rdap),
     }
 
 
@@ -326,6 +349,13 @@ def main(ctx: click.Context) -> None:
     default=False,
     help="Skip IDN homograph attack detection.",
 )
+@click.option(
+    "--check-rdap",
+    "check_rdap_flag",
+    is_flag=True,
+    default=False,
+    help="Also query RDAP for domain age, expiry, registrar, and registry status flags.",
+)
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON instead of a rich table.")
 def check(
     domain: str,
@@ -338,6 +368,7 @@ def check(
     languages: str,
     no_llmo: bool,
     no_homograph: bool,
+    check_rdap_flag: bool,
     as_json: bool,
 ) -> None:
     """Run all enabled checks on DOMAIN and emit a verdict."""
@@ -357,12 +388,13 @@ def check(
     )
     llmo = None if no_llmo else check_llmo(domain)
     homograph = None if no_homograph else check_idn_homograph(domain)
-    verdict = aggregate(basic, history, typo, trademark, semantics, llmo, homograph)
+    rdap = check_rdap(domain) if check_rdap_flag else None
+    verdict = aggregate(basic, history, typo, trademark, semantics, llmo, homograph, rdap)
 
     if as_json:
-        _emit_json(_payload(domain, basic, history, handles, typo, trademark, semantics, llmo, homograph, verdict))
+        _emit_json(_payload(domain, basic, history, handles, typo, trademark, semantics, llmo, homograph, rdap, verdict))
     else:
-        _render_verdict(domain, basic, history, handles, typo, trademark, semantics, llmo, homograph, verdict)
+        _render_verdict(domain, basic, history, handles, typo, trademark, semantics, llmo, homograph, rdap, verdict)
 
     sys.exit(EXIT_CODES[verdict.band])
 
@@ -380,6 +412,20 @@ def history(domain: str, as_json: bool) -> None:
     console.print(f"first_seen={h.first_seen}  last_seen={h.last_seen}  span_days={h.age_days}")
     _emit_lines("Notes", h.notes)
     _emit_lines("Issues", h.issues, style="bold red")
+
+
+@main.command()
+@click.argument("domain")
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
+def rdap(domain: str, as_json: bool) -> None:
+    """Query RDAP for domain age, expiry, registrar, and registry status."""
+    report = check_rdap(domain)
+    if _emit_single("rdap", report, as_json):
+        return
+
+    console.print(_rdap_table(report))
+    _emit_lines("Issues", report.issues, style="bold red")
+    _emit_lines("Notes", report.notes, style="bold")
 
 
 @main.command()

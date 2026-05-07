@@ -9,6 +9,7 @@ from .basic import BasicReport, tld_risk_for
 from .history import HistoryReport
 from .idn_homograph import HomographReport
 from .llmo import LlmoReport
+from .rdap import RdapReport
 from .semantics import SemanticsReport
 from .trademark import TrademarkReport
 from .typosquat import TyposquatReport
@@ -155,6 +156,24 @@ def _homograph_deductions(report: HomographReport) -> list[tuple[str, int]]:
     return []
 
 
+def _rdap_deductions(report: RdapReport) -> list[tuple[str, int]]:
+    if report.status != "ok":
+        return []
+    deductions: list[tuple[str, int]] = []
+    risky = [s for s in report.domain_status if s in {
+        "clientHold", "serverHold", "redemptionPeriod",
+        "pendingDelete", "pendingTransfer", "inactive",
+    }]
+    if risky:
+        deductions.append((f"registry status: {','.join(risky)}", 40))
+    if report.days_to_expiry is not None:
+        if report.days_to_expiry < 0:
+            deductions.append(("domain already expired", 35))
+        elif report.days_to_expiry < 30:
+            deductions.append((f"expires in {report.days_to_expiry} days", 20))
+    return deductions
+
+
 def aggregate(
     basic: BasicReport,
     history: HistoryReport | None = None,
@@ -163,6 +182,7 @@ def aggregate(
     semantics: SemanticsReport | None = None,
     llmo: LlmoReport | None = None,
     homograph: HomographReport | None = None,
+    rdap: RdapReport | None = None,
 ) -> Verdict:
     deductions = _basic_deductions(basic)
     if history is not None:
@@ -177,6 +197,8 @@ def aggregate(
         deductions.extend(_llmo_deductions(llmo))
     if homograph is not None:
         deductions.extend(_homograph_deductions(homograph))
+    if rdap is not None:
+        deductions.extend(_rdap_deductions(rdap))
 
     total = min(100, sum(points for _, points in deductions))
     score = max(0, 100 - total)
