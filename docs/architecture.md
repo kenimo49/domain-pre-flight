@@ -72,8 +72,8 @@ Three rules govern this layout:
 
 ### `checks/trademark.py`
 
-- Three jurisdictions: USPTO (live), EUIPO (live), J-PlatPat (deeplink only — no public API).
-- Per-jurisdiction status: `ok` / `lookup_failed` / `not_supported`.
+- Three jurisdictions: USPTO, EUIPO, J-PlatPat — all **deeplink-only** as of v0.7.1 (ADR 0009). No live queries; the report carries a pre-filled search-UI URL per jurisdiction.
+- Per-jurisdiction status: `ok` / `lookup_failed` / `not_supported`. Today every jurisdiction returns `not_supported` with a populated `deeplink`; the `ok` / `lookup_failed` shapes are kept so a future live-query restoration is plug-in.
 - Concurrent fan-out via `ThreadPoolExecutor`. Slow enough that it is **opt-in** by default.
 - Surfaces *candidates*, not legal opinions. The disclaimer in the report text is intentional.
 

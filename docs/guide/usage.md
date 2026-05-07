@@ -88,7 +88,7 @@ Slow or opt-in checks **must be enabled explicitly**:
 | Flag                       | Effect                                                              |
 | -------------------------- | ------------------------------------------------------------------- |
 | `--check-handles`          | Add GitHub / npm / PyPI / X / Instagram availability                |
-| `--check-trademark`        | Query USPTO + EUIPO + J-PlatPat deeplink                            |
+| `--check-trademark`        | Surface USPTO + EUIPO + J-PlatPat deeplinks (no live API queries — ADR 0009)|
 | `--trademark-jurisdictions`| Subset for `--check-trademark` (default `us,eu,jp`)                 |
 | `--no-history`             | Skip the Wayback Machine call (offline-only)                        |
 | `--no-typosquat`           | Skip the typosquat check                                            |
@@ -194,14 +194,16 @@ dpf trademark mybrand.com --jurisdictions us,eu
 
 Per jurisdiction:
 
-- **USPTO** (US) — live query against `tmsearch.uspto.gov`
-- **EUIPO** (EU) — live query against `tmdn.org` TMview
-- **J-PlatPat** (JP) — no public API; the report surfaces a pre-filled deeplink for manual verification
+- **USPTO** (US) — pre-filled deeplink to `tmsearch.uspto.gov`
+- **EUIPO** (EU) — pre-filled deeplink to `tmdn.org` TMview
+- **J-PlatPat** (JP) — pre-filled deeplink to `j-platpat.inpit.go.jp`
+
+All three jurisdictions return `status="not_supported"` with a populated `deeplink`. Live API queries were removed in v0.7.1 (see [ADR 0009](../decisions/0009-trademark-deeplink-only.md)) because none of the registries publishes a stable, documented, no-auth search API. **Verification is manual — click the deeplink to open the search UI pre-filled with the SLD.**
 
 Status meanings:
 
 - **`ok`** — query succeeded; results may be empty
-- **`lookup_failed`** — transport / API error; retry or use the deeplink
+- **`lookup_failed`** — reserved for future live-query restoration; not produced today
 - **`not_supported`** — no public, redistributable query path; deeplink only
 
 > **This tool flags candidates, not legal opinions.** "Confusingly similar" is a legal standard, not a string-distance threshold. Consult counsel before acting on a flag.

@@ -33,7 +33,7 @@ src/domain_pre_flight/
 │   ├── history.py          # Wayback Machine (3 cheap CDX queries)
 │   ├── handles.py          # GitHub / npm / PyPI / X / Instagram (parallel)
 │   ├── typosquat.py        # Levenshtein + homoglyph + bigram vs known_brands
-│   ├── trademark.py        # USPTO + EUIPO live, J-PlatPat deeplink
+│   ├── trademark.py        # deeplink-only for USPTO / EUIPO / J-PlatPat (ADR 0009)
 │   ├── semantics.py        # multi-language negative-meaning scan
 │   └── llmo.py             # pronunciation / memorability heuristic (experimental)
 ├── checks/score.py         # aggregates check reports into a single Verdict
