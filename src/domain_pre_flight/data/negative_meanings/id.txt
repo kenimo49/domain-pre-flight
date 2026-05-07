@@ -1,0 +1,11 @@
+# Indonesian / Malay (romanised) negative-meaning terms.
+# Format: <term>[<TAB>severity]
+anjing	severe
+babi	severe
+kontol	severe
+memek	severe
+ngentot	severe
+bangsat	severe
+goblok	mild
+bodoh	mild
+mati	mild

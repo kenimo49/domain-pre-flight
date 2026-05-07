@@ -1,0 +1,9 @@
+# Arabic (romanised) negative-meaning terms.
+# Format: <term>[<TAB>severity]
+# SLDs are ASCII; native Arabic-script entries cannot match.
+kafir	severe
+zindiq	severe
+khanzeer	mild
+sharmuta	severe
+kalb	mild
+mawt	mild

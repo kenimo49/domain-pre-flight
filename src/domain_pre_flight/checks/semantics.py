@@ -23,7 +23,7 @@ from importlib.resources import files
 from typing import Literal
 
 Severity = Literal["severe", "mild"]
-SUPPORTED_LANGUAGES = ["en", "es", "pt", "ja", "ko", "zh"]
+SUPPORTED_LANGUAGES = ["en", "es", "pt", "ja", "ko", "zh", "hi", "ar", "vi", "th", "id"]
 
 
 @dataclass

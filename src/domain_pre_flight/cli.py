@@ -366,6 +366,12 @@ def main(ctx: click.Context) -> None:
     help="Skip pronunciation / memorability (LLMO fitness) heuristic.",
 )
 @click.option(
+    "--llmo-locale",
+    type=click.Choice(["en", "neutral"]),
+    default="en",
+    help="LLMO phonotactic locale (default: en).",
+)
+@click.option(
     "--no-homograph",
     is_flag=True,
     default=False,
@@ -396,6 +402,7 @@ def check(
     no_semantics: bool,
     languages: str,
     no_llmo: bool,
+    llmo_locale: str,
     no_homograph: bool,
     check_rdap_flag: bool,
     check_dns_flag: bool,
@@ -416,7 +423,7 @@ def check(
         if no_semantics
         else check_semantics(domain, languages=_split_csv(languages))
     )
-    llmo = None if no_llmo else check_llmo(domain)
+    llmo = None if no_llmo else check_llmo(domain, locale=llmo_locale)  # type: ignore[arg-type]
     homograph = None if no_homograph else check_idn_homograph(domain)
     rdap = check_rdap(domain) if check_rdap_flag else None
     dns_sanity = check_dns_sanity(domain) if check_dns_flag else None
@@ -489,10 +496,16 @@ def homograph(domain: str, as_json: bool) -> None:
 
 @main.command()
 @click.argument("domain")
+@click.option(
+    "--llmo-locale",
+    type=click.Choice(["en", "neutral"]),
+    default="en",
+    help="Phonotactic locale (en: English bias, neutral: relaxes cluster penalty for transliterations).",
+)
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
-def llmo(domain: str, as_json: bool) -> None:
+def llmo(domain: str, llmo_locale: str, as_json: bool) -> None:
     """Show only the LLMO fitness (pronunciation / memorability) for DOMAIN."""
-    report = check_llmo(domain)
+    report = check_llmo(domain, locale=llmo_locale)  # type: ignore[arg-type]
     if _emit_single("llmo", report, as_json):
         return
 

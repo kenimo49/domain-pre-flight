@@ -1,0 +1,12 @@
+# Hindi (romanised) negative-meaning terms.
+# Format: <term>[<TAB>severity]
+# SLDs are ASCII; native Devanagari entries cannot match. Romanised forms only.
+chutiya	severe
+gandu	severe
+randi	severe
+bhosdi	severe
+madarchod	severe
+behenchod	severe
+kamina	mild
+saala	mild
+maut	mild

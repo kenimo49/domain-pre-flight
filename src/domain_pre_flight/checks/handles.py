@@ -77,6 +77,25 @@ def check_npm(name: str, timeout: int = DEFAULT_TIMEOUT) -> HandleResult:
     return HandleResult("npm", "unknown", f"http {resp.status_code}")
 
 
+def check_gitlab(name: str, timeout: int = DEFAULT_TIMEOUT) -> HandleResult:
+    resp = _request("GET", f"https://gitlab.com/api/v4/users?username={name}", timeout)
+    if resp is None:
+        return HandleResult("gitlab", "unknown", "transport error")
+    if resp.status_code == 200:
+        try:
+            data = resp.json()
+        except ValueError:
+            return HandleResult("gitlab", "unknown", "non-JSON response")
+        if isinstance(data, list) and data:
+            return HandleResult("gitlab", "taken")
+        return HandleResult("gitlab", "available")
+    if resp.status_code == 404:
+        return HandleResult("gitlab", "available")
+    if resp.status_code == 429:
+        return HandleResult("gitlab", "unknown", "rate-limited")
+    return HandleResult("gitlab", "unknown", f"http {resp.status_code}")
+
+
 def check_pypi(name: str, timeout: int = DEFAULT_TIMEOUT) -> HandleResult:
     resp = _request("GET", f"https://pypi.org/pypi/{name}/json", timeout)
     if resp is None:
@@ -111,6 +130,7 @@ def check_instagram(name: str, timeout: int = DEFAULT_TIMEOUT) -> HandleResult:
 
 PLATFORM_CHECKS: dict[str, Callable[[str, int], HandleResult]] = {
     "github": check_github,
+    "gitlab": check_gitlab,
     "npm": check_npm,
     "pypi": check_pypi,
     "twitter": check_twitter,

@@ -1,0 +1,7 @@
+# Thai (romanised) negative-meaning terms.
+# Format: <term>[<TAB>severity]
+hia	severe
+saht	severe
+khwai	mild
+ai	mild
+maeng	mild

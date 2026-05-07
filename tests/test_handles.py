@@ -2,12 +2,49 @@ import responses
 
 from domain_pre_flight.checks.handles import (
     check_github,
+    check_gitlab,
     check_handles,
     check_instagram,
     check_npm,
     check_pypi,
     check_twitter,
 )
+
+
+@responses.activate
+def test_gitlab_taken():
+    responses.add(
+        responses.GET,
+        "https://gitlab.com/api/v4/users?username=foo",
+        json=[{"id": 1, "username": "foo"}],
+        status=200,
+            )
+    r = check_gitlab("foo")
+    assert r.status == "taken"
+
+
+@responses.activate
+def test_gitlab_available():
+    responses.add(
+        responses.GET,
+        "https://gitlab.com/api/v4/users?username=zzznotreal",
+        json=[],
+        status=200,
+            )
+    r = check_gitlab("zzznotreal")
+    assert r.status == "available"
+
+
+@responses.activate
+def test_gitlab_rate_limited():
+    responses.add(
+        responses.GET,
+        "https://gitlab.com/api/v4/users?username=foo",
+        status=429,
+            )
+    r = check_gitlab("foo")
+    assert r.status == "unknown"
+    assert "rate" in r.detail.lower()
 
 
 @responses.activate
@@ -86,6 +123,7 @@ def test_instagram_404_available():
 @responses.activate
 def test_check_handles_full_fanout():
     responses.add(responses.GET, "https://api.github.com/users/example", status=200)
+    responses.add(responses.GET, "https://gitlab.com/api/v4/users?username=example", json=[], status=200)
     responses.add(responses.GET, "https://registry.npmjs.org/example", status=404)
     responses.add(responses.GET, "https://pypi.org/pypi/example/json", status=200)
     responses.add(responses.HEAD, "https://twitter.com/example", status=404)
@@ -97,6 +135,7 @@ def test_check_handles_full_fanout():
     statuses = {r.platform: r.status for r in report.results}
     assert statuses == {
         "github": "taken",
+        "gitlab": "available",
         "npm": "available",
         "pypi": "taken",
         "twitter": "available",

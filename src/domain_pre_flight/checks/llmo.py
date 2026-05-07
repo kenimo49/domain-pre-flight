@@ -26,6 +26,7 @@ from typing import Literal
 VOWELS = set("aeiouy")
 
 LlmoBand = Literal["excellent", "good", "ok", "poor"]
+LlmoLocale = Literal["en", "neutral"]
 
 
 @dataclass
@@ -83,8 +84,15 @@ def _band_for(score: int) -> LlmoBand:
     return "poor"
 
 
-def check_llmo(domain: str) -> LlmoReport:
-    """Score the SLD's voice/AI-friendliness on a 0-20 scale."""
+def check_llmo(domain: str, *, locale: LlmoLocale = "en") -> LlmoReport:
+    """Score the SLD's voice/AI-friendliness on a 0-20 scale.
+
+    The default ``locale="en"`` uses English phonotactic expectations
+    (penalises consonant clusters of 4+, vowel ratios outside 0.30-0.55).
+    ``locale="neutral"`` relaxes the cluster ceiling to accommodate
+    transliterated names (Japanese roomaji like ``tsukuru`` has a cluster
+    of 4 by Latin-letter counting that is fine in actual speech).
+    """
     from .basic import normalise
 
     domain, sld, _ = normalise(domain)
@@ -95,17 +103,32 @@ def check_llmo(domain: str) -> LlmoReport:
         return report
 
     cluster = _max_consecutive_consonants(sld)
-    if cluster <= 2:
-        report.cluster_score = 5
-    elif cluster == 3:
-        report.cluster_score = 3
-    elif cluster == 4:
-        report.cluster_score = 1
+    if locale == "neutral":
+        # Roomaji / pinyin transliterations routinely produce 4-5 consecutive
+        # Latin consonants that are pronounced as 1-2 phonemes. Soften the
+        # penalty curve so non-English names aren't unfairly downgraded.
+        if cluster <= 3:
+            report.cluster_score = 5
+        elif cluster == 4:
+            report.cluster_score = 4
+        elif cluster == 5:
+            report.cluster_score = 2
+        else:
+            report.cluster_score = 0
     else:
-        report.cluster_score = 0
+        if cluster <= 2:
+            report.cluster_score = 5
+        elif cluster == 3:
+            report.cluster_score = 3
+        elif cluster == 4:
+            report.cluster_score = 1
+        else:
+            report.cluster_score = 0
 
-    if cluster >= 4:
+    if cluster >= 4 and locale == "en":
         report.notes.append(f"consonant cluster of {cluster} — voice-spell friction")
+    elif cluster >= 5 and locale == "neutral":
+        report.notes.append(f"consonant cluster of {cluster} — long even by neutral standards")
 
     vr = _vowel_ratio(sld)
     if 0.30 <= vr <= 0.55:

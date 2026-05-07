@@ -1,0 +1,8 @@
+# Vietnamese (romanised, no diacritics) negative-meaning terms.
+# Format: <term>[<TAB>severity]
+dume	severe
+dume	severe
+locme	severe
+chetme	severe
+chet	mild
+duma	severe
