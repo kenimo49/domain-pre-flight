@@ -138,7 +138,7 @@ def generate_permutations(domain: str) -> PermutationReport:
     # Order matters: more specific kinds (homoglyph, keyboard_adjacent) come
     # before the generic 'substitution' so their candidates are claimed by
     # the more meaningful label.
-    generators: list[tuple[PermutationKind, "object"]] = [
+    generators: list[tuple[PermutationKind, object]] = [
         ("omission", _omissions),
         ("transposition", _transpositions),
         ("doubling", _doublings),
