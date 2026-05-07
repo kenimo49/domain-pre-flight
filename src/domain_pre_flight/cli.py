@@ -15,6 +15,7 @@ from .checks.basic import BasicReport, check_basic
 from .checks.handles import HandleReport, check_handles
 from .checks.history import HistoryReport, check_history
 from .checks.score import EXIT_CODES, Band, Verdict, aggregate
+from .checks.semantics import SUPPORTED_LANGUAGES, SemanticsReport, check_semantics
 from .checks.trademark import TrademarkReport, check_trademark
 from .checks.typosquat import TyposquatReport, check_typosquat
 
@@ -53,6 +54,19 @@ def _basic_table(basic: BasicReport) -> Table:
     table.add_row("hyphens / digits", f"{basic.hyphens} / {basic.digits}")
     table.add_row("IDN / punycode", "yes" if basic.has_idn else "no")
     table.add_row("syntax valid", "yes" if basic.is_valid_syntax else "NO")
+    return table
+
+
+def _semantics_table(sem: SemanticsReport) -> Table:
+    table = Table(title=f"Negative-meaning scan for '{sem.sld}'", show_header=True, header_style="bold")
+    table.add_column("Language")
+    table.add_column("Term")
+    table.add_column("Severity")
+    table.add_column("Kind")
+    if not sem.matches:
+        table.add_row("(none)", "-", "-", "-")
+    for m in sem.matches[:10]:
+        table.add_row(m.language, m.term, m.severity, m.kind)
     return table
 
 
@@ -115,6 +129,7 @@ def _render_verdict(
     handles: HandleReport | None,
     typo: TyposquatReport | None,
     trademark: TrademarkReport | None,
+    semantics: SemanticsReport | None,
     verdict: Verdict,
 ) -> None:
     console.print(
@@ -145,6 +160,11 @@ def _render_verdict(
         _emit_lines("Trademark issues", trademark.issues, style="bold red")
         _emit_lines("Trademark notes", trademark.notes, style="bold")
 
+    if semantics is not None:
+        console.print(_semantics_table(semantics))
+        _emit_lines("Semantics issues", semantics.issues, style="bold red")
+        _emit_lines("Semantics notes", semantics.notes, style="bold")
+
     if verdict.deductions:
         dt = Table(title="Score deductions", show_header=True, header_style="bold")
         dt.add_column("Reason")
@@ -161,6 +181,7 @@ def _payload(
     handles: HandleReport | None,
     typo: TyposquatReport | None,
     trademark: TrademarkReport | None,
+    semantics: SemanticsReport | None,
     verdict: Verdict | None,
 ) -> dict[str, Any]:
     return {
@@ -180,6 +201,7 @@ def _payload(
         "handles": None if handles is None else asdict(handles),
         "typosquat": None if typo is None else asdict(typo),
         "trademark": None if trademark is None else asdict(trademark),
+        "semantics": None if semantics is None else asdict(semantics),
     }
 
 
@@ -224,6 +246,17 @@ def main(ctx: click.Context) -> None:
     default="us,eu,jp",
     help="Comma-separated jurisdictions for --check-trademark (default: us,eu,jp).",
 )
+@click.option(
+    "--no-semantics",
+    is_flag=True,
+    default=False,
+    help="Skip multi-language negative-meaning scan.",
+)
+@click.option(
+    "--languages",
+    default=",".join(SUPPORTED_LANGUAGES),
+    help=f"Comma-separated language codes for the semantics scan (default: {','.join(SUPPORTED_LANGUAGES)}).",
+)
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON instead of a rich table.")
 def check(
     domain: str,
@@ -232,6 +265,8 @@ def check(
     no_typosquat: bool,
     check_trademark_flag: bool,
     trademark_jurisdictions: str,
+    no_semantics: bool,
+    languages: str,
     as_json: bool,
 ) -> None:
     """Run all enabled checks on DOMAIN and emit a verdict."""
@@ -244,12 +279,17 @@ def check(
         if check_trademark_flag
         else None
     )
-    verdict = aggregate(basic, history, typo, trademark)
+    semantics = (
+        None
+        if no_semantics
+        else check_semantics(domain, languages=[l.strip() for l in languages.split(",")])
+    )
+    verdict = aggregate(basic, history, typo, trademark, semantics)
 
     if as_json:
-        _emit_json(_payload(domain, basic, history, handles, typo, trademark, verdict))
+        _emit_json(_payload(domain, basic, history, handles, typo, trademark, semantics, verdict))
     else:
-        _render_verdict(domain, basic, history, handles, typo, trademark, verdict)
+        _render_verdict(domain, basic, history, handles, typo, trademark, semantics, verdict)
 
     sys.exit(EXIT_CODES[verdict.band])
 
@@ -268,6 +308,27 @@ def history(domain: str, as_json: bool) -> None:
     console.print(f"first_seen={h.first_seen}  last_seen={h.last_seen}  span_days={h.age_days}")
     _emit_lines("Notes", h.notes)
     _emit_lines("Issues", h.issues, style="bold red")
+
+
+@main.command()
+@click.argument("domain")
+@click.option(
+    "--languages",
+    default=",".join(SUPPORTED_LANGUAGES),
+    help=f"Comma-separated language codes (default: {','.join(SUPPORTED_LANGUAGES)}).",
+)
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
+def semantics(domain: str, languages: str, as_json: bool) -> None:
+    """Scan the SLD for negative-meaning terms across major languages."""
+    selected = [l.strip() for l in languages.split(",")]
+    s = check_semantics(domain, languages=selected)
+    if as_json:
+        _emit_json({"domain": s.domain, "semantics": asdict(s)})
+        return
+
+    console.print(_semantics_table(s))
+    _emit_lines("Issues", s.issues, style="bold red")
+    _emit_lines("Notes", s.notes, style="bold")
 
 
 @main.command()

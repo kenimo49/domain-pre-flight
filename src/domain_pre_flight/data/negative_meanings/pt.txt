@@ -1,0 +1,12 @@
+# Portuguese (BR-priority) negative-meaning terms.
+# Format: <term>[<TAB>severity]
+puta	severe
+merda	severe
+caralho	severe
+foda	severe
+buceta	severe
+viado	severe
+golpe	mild
+fraude	severe
+morte	mild
+matar	mild

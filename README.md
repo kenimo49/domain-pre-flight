@@ -23,6 +23,7 @@ It is **not** a domain investing / drop-catching tool. It is the last-mile check
 | Same-name handle check     | GitHub / npm / PyPI / X / Instagram availability for the SLD                                        | public APIs / HEAD requests |
 | Typosquat / brand similarity | Levenshtein distance + homoglyph/bigram heuristics against ~120 widely-recognised brand stems     | bundled list, offline       |
 | Trademark conflict (opt-in) | USPTO + EUIPO TMview search, J-PlatPat deeplink for manual review                                  | public registries, no auth  |
+| Multi-language semantics    | Negative-meaning scan across EN / ES / PT / JA / KO / ZH (curated bundled lists)                    | bundled lists, offline      |
 | Aggregate verdict          | 0–100 score, 4 bands (GREEN / YELLOW / ORANGE / RED), itemised deductions                           | derived           |
 
 The CLI exits with `0` on GREEN/YELLOW, `1` on ORANGE, `2` on RED — convenient for CI gating in domain-procurement scripts.
@@ -63,6 +64,9 @@ domain-pre-flight typosquat goolge.com
 domain-pre-flight check example.com --check-trademark
 domain-pre-flight trademark example.com --jurisdictions us,eu
 
+# Multi-language negative-meaning scan
+domain-pre-flight semantics shineyo.com --languages ja
+
 # Basic structural checks only
 domain-pre-flight basic example.com
 
@@ -98,7 +102,7 @@ The features below are planned but **not yet implemented**. Order is rough; PRs 
 
 ### Medium-term — quality-of-life and global readiness
 
-4. **Multi-language negative-meaning check** ([#4](https://github.com/kenimo49/domain-pre-flight/issues/4)) — scan the SLD against major languages (EN / ZH / ES / PT / KO and others) for slurs, vulgarities, or unfortunate readings.
+4. ~~**Multi-language negative-meaning check** — scan the SLD against major languages (EN / ZH / ES / PT / KO / JA) for slurs, vulgarities, or unfortunate readings.~~ **Shipped in v0.5** — `dpf semantics` (default ON in `dpf check`, disable with `--no-semantics`). Word lists live at `data/negative_meanings/<lang>.txt` and accept community PRs with citations.
 5. **Per-TLD default risk score (deeper)** ([#5](https://github.com/kenimo49/domain-pre-flight/issues/5)) — extend the TLD table to use live Spamhaus / SURBL feed data instead of the static table currently shipped.
 6. **Pronunciation / memorability heuristics (LLMO fitness)** ([#6](https://github.com/kenimo49/domain-pre-flight/issues/6)) — score how easily the domain can be dictated, spelled-back over voice, and recognised by AI search assistants.
 

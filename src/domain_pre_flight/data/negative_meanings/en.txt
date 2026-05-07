@@ -1,0 +1,23 @@
+# English negative-meaning terms.
+# Format: <term>[<TAB>severity]   severity = severe | mild (default: mild)
+# Sources: common moderation word lists (LDNOOBW project, public Banned Word lists),
+# narrowed to terms whose presence in an SLD is a clear signal rather than coincidence.
+# Comments start with #.
+fuck	severe
+shit	severe
+bitch	severe
+asshole	severe
+slut	severe
+whore	severe
+porn	severe
+sex	mild
+nazi	severe
+hitler	severe
+suicide	severe
+kill	mild
+hate	mild
+scam	severe
+fraud	severe
+spam	mild
+crap	mild
+damn	mild

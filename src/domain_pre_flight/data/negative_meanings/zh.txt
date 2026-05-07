@@ -1,0 +1,11 @@
+# Chinese pinyin / romanised negative-meaning terms (Mandarin priority).
+# Format: <term>[<TAB>severity]
+# Note: number-letter homophones like "si" (4 = death) are intentionally
+# *not* listed here at the digit level — they are handled in basic.py via
+# the digit penalty. This list catches latin-script transliterations.
+shabi	severe
+caonima	severe
+nimade	severe
+sibi	severe
+shasi	mild
+sile	mild

@@ -7,6 +7,7 @@ from enum import Enum
 
 from .basic import BasicReport, tld_risk_for
 from .history import HistoryReport
+from .semantics import SemanticsReport
 from .trademark import TrademarkReport
 from .typosquat import TyposquatReport
 
@@ -120,11 +121,26 @@ def _trademark_deductions(report: TrademarkReport) -> list[tuple[str, int]]:
     return []
 
 
+def _semantics_deductions(report: SemanticsReport) -> list[tuple[str, int]]:
+    if not report.matches:
+        return []
+    severe_exact = [m for m in report.matches if m.severity == "severe" and m.kind == "exact"]
+    severe_substring = [m for m in report.matches if m.severity == "severe" and m.kind == "substring"]
+    if severe_exact:
+        m = severe_exact[0]
+        return [(f"identical to severe negative term '{m.term}' ({m.language})", 70)]
+    if severe_substring:
+        m = severe_substring[0]
+        return [(f"contains severe negative term '{m.term}' ({m.language})", 30)]
+    return []
+
+
 def aggregate(
     basic: BasicReport,
     history: HistoryReport | None = None,
     typosquat: TyposquatReport | None = None,
     trademark: TrademarkReport | None = None,
+    semantics: SemanticsReport | None = None,
 ) -> Verdict:
     deductions = _basic_deductions(basic)
     if history is not None:
@@ -133,6 +149,8 @@ def aggregate(
         deductions.extend(_typosquat_deductions(typosquat))
     if trademark is not None:
         deductions.extend(_trademark_deductions(trademark))
+    if semantics is not None:
+        deductions.extend(_semantics_deductions(semantics))
 
     total = min(100, sum(points for _, points in deductions))
     score = max(0, 100 - total)

@@ -1,0 +1,15 @@
+# Spanish (LatAm-neutral) negative-meaning terms.
+# Format: <term>[<TAB>severity]
+puta	severe
+mierda	severe
+cabron	severe
+cabrón	severe
+pendejo	severe
+joder	severe
+coño	severe
+verga	severe
+maricon	severe
+maricón	severe
+estafa	severe
+muerte	mild
+matar	mild

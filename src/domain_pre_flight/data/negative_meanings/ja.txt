@@ -1,0 +1,16 @@
+# Japanese romanised / English-letter readings to avoid.
+# Format: <term>[<TAB>severity]
+# Targets words that, when written in latin script as part of an SLD,
+# carry strongly negative or unlucky connotations in JP context.
+shine	severe
+shineyo	severe
+korose	severe
+korosu	severe
+baka	mild
+aho	mild
+busu	mild
+unko	severe
+chinpo	severe
+manko	severe
+yakuza	severe
+shinu	severe

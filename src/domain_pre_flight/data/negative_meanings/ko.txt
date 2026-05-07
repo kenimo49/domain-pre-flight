@@ -1,0 +1,9 @@
+# Korean romanised negative-meaning terms.
+# Format: <term>[<TAB>severity]
+sibal	severe
+ssibal	severe
+shibal	severe
+gaesaekki	severe
+gaesekki	severe
+michin	mild
+nigeo	severe
