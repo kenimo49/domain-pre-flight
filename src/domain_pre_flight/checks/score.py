@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from .basic import BasicReport, tld_risk_for
+from .dns_sanity import DnsSanityReport
 from .history import HistoryReport
 from .idn_homograph import HomographReport
 from .llmo import LlmoReport
@@ -174,6 +175,15 @@ def _rdap_deductions(report: RdapReport) -> list[tuple[str, int]]:
     return deductions
 
 
+def _dns_sanity_deductions(report: DnsSanityReport) -> list[tuple[str, int]]:
+    deductions: list[tuple[str, int]] = []
+    if report.mx == "present" and report.spf == "absent":
+        deductions.append(("MX present but no SPF record", 10))
+    if report.mx == "present" and report.dmarc == "absent":
+        deductions.append(("MX present but no DMARC record", 10))
+    return deductions
+
+
 def aggregate(
     basic: BasicReport,
     history: HistoryReport | None = None,
@@ -183,6 +193,7 @@ def aggregate(
     llmo: LlmoReport | None = None,
     homograph: HomographReport | None = None,
     rdap: RdapReport | None = None,
+    dns_sanity: DnsSanityReport | None = None,
 ) -> Verdict:
     deductions = _basic_deductions(basic)
     if history is not None:
@@ -199,6 +210,8 @@ def aggregate(
         deductions.extend(_homograph_deductions(homograph))
     if rdap is not None:
         deductions.extend(_rdap_deductions(rdap))
+    if dns_sanity is not None:
+        deductions.extend(_dns_sanity_deductions(dns_sanity))
 
     total = min(100, sum(points for _, points in deductions))
     score = max(0, 100 - total)

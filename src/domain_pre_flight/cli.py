@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .checks.basic import BasicReport, check_basic
+from .checks.dns_sanity import DnsSanityReport, check_dns_sanity
 from .checks.handles import HandleReport, check_handles
 from .checks.history import HistoryReport, check_history
 from .checks.idn_homograph import HomographReport, check_idn_homograph
@@ -57,6 +58,19 @@ def _basic_table(basic: BasicReport) -> Table:
     table.add_row("hyphens / digits", f"{basic.hyphens} / {basic.digits}")
     table.add_row("IDN / punycode", "yes" if basic.has_idn else "no")
     table.add_row("syntax valid", "yes" if basic.is_valid_syntax else "NO")
+    return table
+
+
+def _dns_sanity_table(r: DnsSanityReport) -> Table:
+    table = Table(title=f"DNS hygiene for '{r.domain}'", show_header=True, header_style="bold")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("MX", r.mx)
+    table.add_row("SPF", r.spf)
+    table.add_row("DMARC", r.dmarc)
+    table.add_row("DKIM", r.dkim)
+    if r.mx_records:
+        table.add_row("MX hosts", ", ".join(r.mx_records[:3]))
     return table
 
 
@@ -174,6 +188,7 @@ def _render_verdict(
     llmo: LlmoReport | None,
     homograph: HomographReport | None,
     rdap: RdapReport | None,
+    dns_sanity: DnsSanityReport | None,
     verdict: Verdict,
 ) -> None:
     console.print(
@@ -224,6 +239,11 @@ def _render_verdict(
         _emit_lines("RDAP issues", rdap.issues, style="bold red")
         _emit_lines("RDAP notes", rdap.notes, style="bold")
 
+    if dns_sanity is not None:
+        console.print(_dns_sanity_table(dns_sanity))
+        _emit_lines("DNS issues", dns_sanity.issues, style="bold red")
+        _emit_lines("DNS notes", dns_sanity.notes, style="bold")
+
     if verdict.deductions:
         dt = Table(title="Score deductions", show_header=True, header_style="bold")
         dt.add_column("Reason")
@@ -244,6 +264,7 @@ def _payload(
     llmo: LlmoReport | None,
     homograph: HomographReport | None,
     rdap: RdapReport | None,
+    dns_sanity: DnsSanityReport | None,
     verdict: Verdict | None,
 ) -> dict[str, Any]:
     return {
@@ -267,6 +288,7 @@ def _payload(
         "llmo": None if llmo is None else asdict(llmo),
         "homograph": None if homograph is None else asdict(homograph),
         "rdap": None if rdap is None else asdict(rdap),
+        "dns_sanity": None if dns_sanity is None else asdict(dns_sanity),
     }
 
 
@@ -356,6 +378,13 @@ def main(ctx: click.Context) -> None:
     default=False,
     help="Also query RDAP for domain age, expiry, registrar, and registry status flags.",
 )
+@click.option(
+    "--check-dns",
+    "check_dns_flag",
+    is_flag=True,
+    default=False,
+    help="Also probe MX / SPF / DMARC / DKIM presence (DNS lookups, ~5s).",
+)
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON instead of a rich table.")
 def check(
     domain: str,
@@ -369,6 +398,7 @@ def check(
     no_llmo: bool,
     no_homograph: bool,
     check_rdap_flag: bool,
+    check_dns_flag: bool,
     as_json: bool,
 ) -> None:
     """Run all enabled checks on DOMAIN and emit a verdict."""
@@ -389,12 +419,13 @@ def check(
     llmo = None if no_llmo else check_llmo(domain)
     homograph = None if no_homograph else check_idn_homograph(domain)
     rdap = check_rdap(domain) if check_rdap_flag else None
-    verdict = aggregate(basic, history, typo, trademark, semantics, llmo, homograph, rdap)
+    dns_sanity = check_dns_sanity(domain) if check_dns_flag else None
+    verdict = aggregate(basic, history, typo, trademark, semantics, llmo, homograph, rdap, dns_sanity)
 
     if as_json:
-        _emit_json(_payload(domain, basic, history, handles, typo, trademark, semantics, llmo, homograph, rdap, verdict))
+        _emit_json(_payload(domain, basic, history, handles, typo, trademark, semantics, llmo, homograph, rdap, dns_sanity, verdict))
     else:
-        _render_verdict(domain, basic, history, handles, typo, trademark, semantics, llmo, homograph, rdap, verdict)
+        _render_verdict(domain, basic, history, handles, typo, trademark, semantics, llmo, homograph, rdap, dns_sanity, verdict)
 
     sys.exit(EXIT_CODES[verdict.band])
 
@@ -412,6 +443,20 @@ def history(domain: str, as_json: bool) -> None:
     console.print(f"first_seen={h.first_seen}  last_seen={h.last_seen}  span_days={h.age_days}")
     _emit_lines("Notes", h.notes)
     _emit_lines("Issues", h.issues, style="bold red")
+
+
+@main.command()
+@click.argument("domain")
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
+def dns(domain: str, as_json: bool) -> None:
+    """Probe MX / SPF / DMARC / DKIM presence for DOMAIN."""
+    report = check_dns_sanity(domain)
+    if _emit_single("dns_sanity", report, as_json):
+        return
+
+    console.print(_dns_sanity_table(report))
+    _emit_lines("Issues", report.issues, style="bold red")
+    _emit_lines("Notes", report.notes, style="bold")
 
 
 @main.command()
