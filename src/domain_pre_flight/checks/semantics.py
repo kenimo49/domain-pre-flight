@@ -82,10 +82,10 @@ def check_semantics(
         report.notes.append("no SLD parsed — semantics check skipped")
         return report
 
-    unknown = [l for l in selected if l not in SUPPORTED_LANGUAGES]
+    unknown = [code for code in selected if code not in SUPPORTED_LANGUAGES]
     if unknown:
         report.notes.append(f"ignored unsupported languages: {', '.join(unknown)}")
-    selected = [l for l in selected if l in SUPPORTED_LANGUAGES]
+    selected = [code for code in selected if code in SUPPORTED_LANGUAGES]
 
     for lang in selected:
         for term, severity in _load_language(lang):

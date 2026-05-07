@@ -127,6 +127,7 @@ def test_check_handles_invalid_domain():
 
 def test_check_handles_transport_error_returns_unknown(monkeypatch):
     import requests
+
     from domain_pre_flight.checks import handles as handles_mod
 
     def boom(*args, **kwargs):
