@@ -23,6 +23,7 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.1",
+    "Levenshtein>=0.25",
     "requests>=2.31",
     "rich>=13.7",
     "tldextract>=5.1",

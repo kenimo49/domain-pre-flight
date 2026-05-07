@@ -15,6 +15,7 @@ from .checks.basic import BasicReport, check_basic
 from .checks.handles import HandleReport, check_handles
 from .checks.history import HistoryReport, check_history
 from .checks.score import EXIT_CODES, Band, Verdict, aggregate
+from .checks.typosquat import TyposquatReport, check_typosquat
 
 _HANDLE_STATUS_STYLES = {
     "taken": "bold red",
@@ -54,6 +55,18 @@ def _basic_table(basic: BasicReport) -> Table:
     return table
 
 
+def _typosquat_table(typo: TyposquatReport) -> Table:
+    table = Table(title=f"Typosquat / brand similarity for '{typo.sld}'", show_header=True, header_style="bold")
+    table.add_column("Brand")
+    table.add_column("Distance", justify="right")
+    table.add_column("Kind")
+    if not typo.matches:
+        table.add_row("(no matches)", "-", "-")
+    for m in typo.matches[:10]:
+        table.add_row(m.brand, str(m.distance), m.kind)
+    return table
+
+
 def _handles_table(handles: HandleReport) -> Table:
     table = Table(title=f"Handle availability for '{handles.sld}'", show_header=True, header_style="bold")
     table.add_column("Platform")
@@ -82,6 +95,7 @@ def _render_verdict(
     basic: BasicReport,
     history: HistoryReport | None,
     handles: HandleReport | None,
+    typo: TyposquatReport | None,
     verdict: Verdict,
 ) -> None:
     console.print(
@@ -102,6 +116,11 @@ def _render_verdict(
         console.print(_handles_table(handles))
         _emit_lines("Handle notes", handles.notes, style="bold")
 
+    if typo is not None:
+        console.print(_typosquat_table(typo))
+        _emit_lines("Typosquat issues", typo.issues, style="bold red")
+        _emit_lines("Typosquat notes", typo.notes, style="bold")
+
     if verdict.deductions:
         dt = Table(title="Score deductions", show_header=True, header_style="bold")
         dt.add_column("Reason")
@@ -116,6 +135,7 @@ def _payload(
     basic: BasicReport,
     history: HistoryReport | None,
     handles: HandleReport | None,
+    typo: TyposquatReport | None,
     verdict: Verdict | None,
 ) -> dict[str, Any]:
     return {
@@ -133,6 +153,7 @@ def _payload(
         "basic": {**asdict(basic), "length": basic.length},
         "history": None if history is None else asdict(history),
         "handles": None if handles is None else asdict(handles),
+        "typosquat": None if typo is None else asdict(typo),
     }
 
 
@@ -159,18 +180,31 @@ def main(ctx: click.Context) -> None:
     default=False,
     help="Also check same-name availability on GitHub / npm / PyPI / X / Instagram.",
 )
+@click.option(
+    "--no-typosquat",
+    is_flag=True,
+    default=False,
+    help="Skip typosquat / brand-similarity check.",
+)
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON instead of a rich table.")
-def check(domain: str, no_history: bool, check_handles_flag: bool, as_json: bool) -> None:
+def check(
+    domain: str,
+    no_history: bool,
+    check_handles_flag: bool,
+    no_typosquat: bool,
+    as_json: bool,
+) -> None:
     """Run all enabled checks on DOMAIN and emit a verdict."""
     basic = check_basic(domain)
     history = None if no_history else check_history(domain)
     handles = check_handles(domain) if check_handles_flag else None
-    verdict = aggregate(basic, history)
+    typo = None if no_typosquat else check_typosquat(domain)
+    verdict = aggregate(basic, history, typo)
 
     if as_json:
-        _emit_json(_payload(domain, basic, history, handles, verdict))
+        _emit_json(_payload(domain, basic, history, handles, typo, verdict))
     else:
-        _render_verdict(domain, basic, history, handles, verdict)
+        _render_verdict(domain, basic, history, handles, typo, verdict)
 
     sys.exit(EXIT_CODES[verdict.band])
 
@@ -189,6 +223,21 @@ def history(domain: str, as_json: bool) -> None:
     console.print(f"first_seen={h.first_seen}  last_seen={h.last_seen}  span_days={h.age_days}")
     _emit_lines("Notes", h.notes)
     _emit_lines("Issues", h.issues, style="bold red")
+
+
+@main.command()
+@click.argument("domain")
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
+def typosquat(domain: str, as_json: bool) -> None:
+    """Show only the typosquat / brand-similarity check for DOMAIN."""
+    t = check_typosquat(domain)
+    if as_json:
+        _emit_json({"domain": t.domain, "typosquat": asdict(t)})
+        return
+
+    console.print(_typosquat_table(t))
+    _emit_lines("Issues", t.issues, style="bold red")
+    _emit_lines("Notes", t.notes, style="bold")
 
 
 @main.command()

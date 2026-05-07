@@ -7,6 +7,7 @@ from enum import Enum
 
 from .basic import BasicReport, tld_risk_for
 from .history import HistoryReport
+from .typosquat import TyposquatReport
 
 
 class Band(str, Enum):
@@ -92,10 +93,30 @@ def _history_deductions(report: HistoryReport) -> list[tuple[str, int]]:
     return []
 
 
-def aggregate(basic: BasicReport, history: HistoryReport | None = None) -> Verdict:
+def _typosquat_deductions(report: TyposquatReport) -> list[tuple[str, int]]:
+    if not report.matches:
+        return []
+    severe = [m for m in report.matches if m.kind in {"exact", "near", "homoglyph", "bigram"}]
+    if not severe:
+        return []
+    first = severe[0]
+    if first.kind == "exact":
+        return [(f"identical to known brand '{first.brand}'", 60)]
+    if first.kind in {"near", "homoglyph"}:
+        return [(f"resembles known brand '{first.brand}' ({first.kind})", 30)]
+    return [(f"shares bigram set with '{first.brand}'", 15)]
+
+
+def aggregate(
+    basic: BasicReport,
+    history: HistoryReport | None = None,
+    typosquat: TyposquatReport | None = None,
+) -> Verdict:
     deductions = _basic_deductions(basic)
     if history is not None:
         deductions.extend(_history_deductions(history))
+    if typosquat is not None:
+        deductions.extend(_typosquat_deductions(typosquat))
 
     total = min(100, sum(points for _, points in deductions))
     score = max(0, 100 - total)

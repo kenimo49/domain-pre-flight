@@ -48,6 +48,8 @@ CASES=(
   "mybrand.online|YELLOW|0"
   "mybrand.shop|YELLOW|0"
   "looks-fine.xyz|ORANGE|1"
+  "goolge.com|YELLOW|0"
+  "microsft.com|YELLOW|0"
 )
 
 run_case() {

@@ -1,0 +1,158 @@
+# Curated list of widely-recognised brand stems used for typosquat detection.
+# v0.3 starts with a hand-picked ~120 names skewed toward the brands most often
+# typosquatted (tech, finance, social, streaming, retail). Phase 5 will replace
+# this with an auto-refreshed Tranco-derived list.
+#
+# Format: one lowercase brand stem per line, comments start with #.
+# Brand stems should be the SLD a typical user would type, not the legal name.
+
+# Tech giants
+google
+apple
+microsoft
+amazon
+meta
+facebook
+instagram
+whatsapp
+twitter
+youtube
+linkedin
+tiktok
+snapchat
+pinterest
+reddit
+
+# Cloud / infra
+cloudflare
+aws
+azure
+digitalocean
+heroku
+vercel
+netlify
+fastly
+oracle
+salesforce
+
+# Dev tools
+github
+gitlab
+bitbucket
+stackoverflow
+npm
+pypi
+docker
+kubernetes
+gradle
+jenkins
+
+# AI
+openai
+anthropic
+huggingface
+chatgpt
+claude
+midjourney
+stability
+nvidia
+
+# Communications
+slack
+discord
+telegram
+signal
+zoom
+skype
+webex
+
+# Streaming / media
+netflix
+spotify
+hulu
+disney
+twitch
+soundcloud
+vimeo
+patreon
+substack
+
+# E-commerce / payments
+shopify
+etsy
+ebay
+walmart
+target
+stripe
+paypal
+square
+visa
+mastercard
+
+# Travel / mobility
+uber
+lyft
+airbnb
+booking
+expedia
+tesla
+toyota
+
+# Finance
+coinbase
+binance
+robinhood
+chase
+jpmorgan
+goldmansachs
+revolut
+wise
+
+# News / search
+yahoo
+bing
+duckduckgo
+wikipedia
+medium
+quora
+
+# Productivity
+notion
+figma
+canva
+dropbox
+asana
+trello
+airtable
+zapier
+
+# Major non-tech brands frequently typosquatted
+nike
+adidas
+puma
+cocacola
+pepsi
+mcdonalds
+starbucks
+samsung
+sony
+panasonic
+lg
+
+# JP brands / commonly squatted
+rakuten
+mercari
+softbank
+docomo
+nintendo
+toyota
+sushi
+
+# OS / platforms
+android
+windows
+linux
+ubuntu
+firefox
+chrome
+safari

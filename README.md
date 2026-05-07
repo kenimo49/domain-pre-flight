@@ -21,6 +21,7 @@ It is **not** a domain investing / drop-catching tool. It is the last-mile check
 | TLD risk score             | per-TLD default risk based on Spamhaus / SURBL abuse statistics (.tk/.cf/.ml etc. heavily penalised) | static table      |
 | Past content history       | Wayback Machine snapshot count, first/last archived date, archive span                              | archive.org (free, no auth) |
 | Same-name handle check     | GitHub / npm / PyPI / X / Instagram availability for the SLD                                        | public APIs / HEAD requests |
+| Typosquat / brand similarity | Levenshtein distance + homoglyph/bigram heuristics against ~120 widely-recognised brand stems     | bundled list, offline       |
 | Aggregate verdict          | 0–100 score, 4 bands (GREEN / YELLOW / ORANGE / RED), itemised deductions                           | derived           |
 
 The CLI exits with `0` on GREEN/YELLOW, `1` on ORANGE, `2` on RED — convenient for CI gating in domain-procurement scripts.
@@ -54,6 +55,9 @@ domain-pre-flight history example.com
 # Handle availability only (subset selectable via --platforms)
 domain-pre-flight handles example.com --platforms github,npm,pypi
 
+# Typosquat / brand-similarity check only
+domain-pre-flight typosquat goolge.com
+
 # Basic structural checks only
 domain-pre-flight basic example.com
 
@@ -83,8 +87,8 @@ The features below are planned but **not yet implemented**. Order is rough; PRs 
 
 ### Near-term — eliminate the most common "should not have registered this" failure modes
 
-1. ~~**Same-name social / package availability** — check whether the matching handle is free on GitHub, npm, PyPI, and major social networks (HEAD requests / public APIs).~~ **Shipped in v0.2** — `dpf handles` and `--check-handles`.
-2. **Typosquat / brand-similarity flag** ([#2](https://github.com/kenimo49/domain-pre-flight/issues/2)) — Levenshtein distance and bigram similarity against a Tranco top-N list. Avoids unintentionally registering a name that resembles a major brand and risks a UDRP filing.
+1. ~~**Same-name social / package availability** — check whether the matching handle is free on GitHub, npm, PyPI, and major social networks.~~ **Shipped in v0.2** — `dpf handles` and `--check-handles`.
+2. ~~**Typosquat / brand-similarity flag** — Levenshtein distance and bigram similarity against a curated brand list.~~ **Shipped in v0.3** — `dpf typosquat` (default ON in `dpf check`, disable with `--no-typosquat`).
 3. **Trademark conflict check** ([#3](https://github.com/kenimo49/domain-pre-flight/issues/3)) — query USPTO TSDR API, J-PlatPat, and EUIPO for identical and confusingly similar marks. The single biggest reason new sites get yanked after launch (UDRP / trademark complaint), so this is a near-must-have.
 
 ### Medium-term — quality-of-life and global readiness
