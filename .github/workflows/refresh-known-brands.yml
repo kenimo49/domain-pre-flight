@@ -1,0 +1,42 @@
+name: refresh-known-brands
+
+on:
+  schedule:
+    # First Tuesday of each month at 03:30 UTC (offset from refresh-tld-risk).
+    - cron: "30 3 1-7 * 2"
+  workflow_dispatch: {}
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install runtime deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests tldextract
+
+      - name: Refresh brand list from Tranco
+        run: python scripts/refresh_known_brands.py --top 2000
+
+      - name: Open PR if data changed
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "data: refresh known_brands.txt from Tranco"
+          title: "data: refresh known_brands.txt (auto, Tranco top 2000)"
+          body: |
+            Automated monthly refresh of `src/domain_pre_flight/data/known_brands.txt`.
+            Pulls the latest Tranco top 2000 and unions stems with the curated
+            baseline. Manually re-run with `python scripts/refresh_known_brands.py`.
+          branch: auto/known-brands-refresh
+          delete-branch: true

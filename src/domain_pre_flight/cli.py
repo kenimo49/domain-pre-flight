@@ -17,6 +17,7 @@ from .checks.handles import HandleReport, check_handles
 from .checks.history import HistoryReport, check_history
 from .checks.idn_homograph import HomographReport, check_idn_homograph
 from .checks.llmo import LlmoReport, check_llmo
+from .checks.permutations import generate_permutations
 from .checks.rdap import RdapReport, check_rdap
 from .checks.score import EXIT_CODES, Band, Verdict, aggregate
 from .checks.semantics import SUPPORTED_LANGUAGES, SemanticsReport, check_semantics
@@ -450,6 +451,32 @@ def history(domain: str, as_json: bool) -> None:
     console.print(f"first_seen={h.first_seen}  last_seen={h.last_seen}  span_days={h.age_days}")
     _emit_lines("Notes", h.notes)
     _emit_lines("Issues", h.issues, style="bold red")
+
+
+@main.command()
+@click.argument("domain")
+@click.option("--limit", type=int, default=None, help="Show only the first N permutations.")
+@click.option("--kind", default=None, help="Filter by kind (omission/substitution/...).")
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
+def permutations(domain: str, limit: int | None, kind: str | None, as_json: bool) -> None:
+    """Generate dnstwist-style typo / spoof permutations of the SLD."""
+    report = generate_permutations(domain)
+    if kind:
+        report.permutations = [p for p in report.permutations if p.kind == kind]
+    if limit:
+        report.permutations = report.permutations[:limit]
+    if as_json:
+        _emit_json({"domain": report.base_domain, "permutations": asdict(report)})
+        return
+    table = Table(title=f"Permutations of '{report.sld}'", show_header=True, header_style="bold")
+    table.add_column("Candidate")
+    table.add_column("Kind")
+    for p in report.permutations[:50]:
+        table.add_row(p.candidate, p.kind)
+    if len(report.permutations) > 50:
+        table.add_row(f"... ({len(report.permutations) - 50} more)", "")
+    console.print(table)
+    _emit_lines("Notes", report.notes, style="bold")
 
 
 @main.command()
