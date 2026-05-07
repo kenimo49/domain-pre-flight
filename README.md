@@ -20,6 +20,7 @@ It is **not** a domain investing / drop-catching tool. It is the last-mile check
 | Basic structural check     | length, hyphens, digits, IDN/punycode, syntactic validity (RFC 1035)                                | offline, no API   |
 | TLD risk score             | per-TLD default risk based on Spamhaus / SURBL abuse statistics (.tk/.cf/.ml etc. heavily penalised) | static table      |
 | Past content history       | Wayback Machine snapshot count, first/last archived date, archive span                              | archive.org (free, no auth) |
+| Same-name handle check     | GitHub / npm / PyPI / X / Instagram availability for the SLD                                        | public APIs / HEAD requests |
 | Aggregate verdict          | 0–100 score, 4 bands (GREEN / YELLOW / ORANGE / RED), itemised deductions                           | derived           |
 
 The CLI exits with `0` on GREEN/YELLOW, `1` on ORANGE, `2` on RED — convenient for CI gating in domain-procurement scripts.
@@ -41,11 +42,17 @@ domain-pre-flight check example.com
 # Skip the network call to Wayback (offline only)
 domain-pre-flight check example.com --no-history
 
+# Include same-name handle availability across GitHub / npm / PyPI / X / Instagram
+domain-pre-flight check example.com --check-handles
+
 # JSON output for piping
 domain-pre-flight check example.com --json
 
 # History only
 domain-pre-flight history example.com
+
+# Handle availability only (subset selectable via --platforms)
+domain-pre-flight handles example.com --platforms github,npm,pypi
 
 # Basic structural checks only
 domain-pre-flight basic example.com
@@ -76,15 +83,15 @@ The features below are planned but **not yet implemented**. Order is rough; PRs 
 
 ### Near-term — eliminate the most common "should not have registered this" failure modes
 
-1. **Trademark conflict check** — query USPTO TSDR API, J-PlatPat, and EUIPO for identical and confusingly similar marks. The single biggest reason new sites get yanked after launch (UDRP / trademark complaint), so this is a near-must-have.
-2. **Same-name social / package availability** — check whether the matching handle is free on GitHub, npm, PyPI, and major social networks (HEAD requests / public APIs). Naming consistency materially affects whether the domain is worth taking.
-3. **Typosquat / brand-similarity flag** — Levenshtein distance and bigram similarity against a Tranco top-N list. Avoids unintentionally registering a name that resembles a major brand and risks a UDRP filing.
+1. ~~**Same-name social / package availability** — check whether the matching handle is free on GitHub, npm, PyPI, and major social networks (HEAD requests / public APIs).~~ **Shipped in v0.2** — `dpf handles` and `--check-handles`.
+2. **Typosquat / brand-similarity flag** ([#2](https://github.com/kenimo49/domain-pre-flight/issues/2)) — Levenshtein distance and bigram similarity against a Tranco top-N list. Avoids unintentionally registering a name that resembles a major brand and risks a UDRP filing.
+3. **Trademark conflict check** ([#3](https://github.com/kenimo49/domain-pre-flight/issues/3)) — query USPTO TSDR API, J-PlatPat, and EUIPO for identical and confusingly similar marks. The single biggest reason new sites get yanked after launch (UDRP / trademark complaint), so this is a near-must-have.
 
 ### Medium-term — quality-of-life and global readiness
 
-4. **Multi-language negative-meaning check** — scan the SLD against major languages (EN / ZH / ES / PT / KO and others) for slurs, vulgarities, or unfortunate readings. Important once a project has any chance of going global.
-5. **Per-TLD default risk score (deeper)** — extend the TLD table to use live Spamhaus / SURBL feed data instead of the static table currently shipped.
-6. **Pronunciation / memorability heuristics (LLMO fitness)** — score how easily the domain can be dictated, spelled-back over voice, and recognised by AI search assistants. Non-trivial signal for any project that expects to be cited by LLM-driven discovery surfaces.
+4. **Multi-language negative-meaning check** ([#4](https://github.com/kenimo49/domain-pre-flight/issues/4)) — scan the SLD against major languages (EN / ZH / ES / PT / KO and others) for slurs, vulgarities, or unfortunate readings.
+5. **Per-TLD default risk score (deeper)** ([#5](https://github.com/kenimo49/domain-pre-flight/issues/5)) — extend the TLD table to use live Spamhaus / SURBL feed data instead of the static table currently shipped.
+6. **Pronunciation / memorability heuristics (LLMO fitness)** ([#6](https://github.com/kenimo49/domain-pre-flight/issues/6)) — score how easily the domain can be dictated, spelled-back over voice, and recognised by AI search assistants.
 
 ### Opt-in — paid-API features (default OFF, not yet implemented)
 

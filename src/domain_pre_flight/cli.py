@@ -12,8 +12,15 @@ from rich.console import Console
 from rich.table import Table
 
 from .checks.basic import BasicReport, check_basic
+from .checks.handles import HandleReport, check_handles
 from .checks.history import HistoryReport, check_history
 from .checks.score import EXIT_CODES, Band, Verdict, aggregate
+
+_HANDLE_STATUS_STYLES = {
+    "taken": "bold red",
+    "available": "bold green",
+    "unknown": "bold yellow",
+}
 
 console = Console()
 
@@ -47,6 +54,17 @@ def _basic_table(basic: BasicReport) -> Table:
     return table
 
 
+def _handles_table(handles: HandleReport) -> Table:
+    table = Table(title=f"Handle availability for '{handles.sld}'", show_header=True, header_style="bold")
+    table.add_column("Platform")
+    table.add_column("Status")
+    table.add_column("Detail")
+    for r in handles.results:
+        style = _HANDLE_STATUS_STYLES.get(r.status, "")
+        table.add_row(r.platform, f"[{style}]{r.status}[/]" if style else r.status, r.detail or "-")
+    return table
+
+
 def _history_table(history: HistoryReport) -> Table:
     table = Table(title="History (Wayback Machine)", show_header=True, header_style="bold")
     table.add_column("Field")
@@ -59,7 +77,13 @@ def _history_table(history: HistoryReport) -> Table:
     return table
 
 
-def _render_verdict(domain: str, basic: BasicReport, history: HistoryReport | None, verdict: Verdict) -> None:
+def _render_verdict(
+    domain: str,
+    basic: BasicReport,
+    history: HistoryReport | None,
+    handles: HandleReport | None,
+    verdict: Verdict,
+) -> None:
     console.print(
         f"\n[bold]{domain}[/bold]  →  "
         f"[{_BAND_STYLES[verdict.band]}]{verdict.band.value}[/]  "
@@ -74,6 +98,10 @@ def _render_verdict(domain: str, basic: BasicReport, history: HistoryReport | No
         _emit_lines("History issues", history.issues, style="bold red")
         _emit_lines("History notes", history.notes, style="bold")
 
+    if handles is not None:
+        console.print(_handles_table(handles))
+        _emit_lines("Handle notes", handles.notes, style="bold")
+
     if verdict.deductions:
         dt = Table(title="Score deductions", show_header=True, header_style="bold")
         dt.add_column("Reason")
@@ -83,7 +111,13 @@ def _render_verdict(domain: str, basic: BasicReport, history: HistoryReport | No
         console.print(dt)
 
 
-def _payload(domain: str, basic: BasicReport, history: HistoryReport | None, verdict: Verdict | None) -> dict[str, Any]:
+def _payload(
+    domain: str,
+    basic: BasicReport,
+    history: HistoryReport | None,
+    handles: HandleReport | None,
+    verdict: Verdict | None,
+) -> dict[str, Any]:
     return {
         "domain": domain,
         "verdict": (
@@ -98,6 +132,7 @@ def _payload(domain: str, basic: BasicReport, history: HistoryReport | None, ver
         ),
         "basic": {**asdict(basic), "length": basic.length},
         "history": None if history is None else asdict(history),
+        "handles": None if handles is None else asdict(handles),
     }
 
 
@@ -117,17 +152,25 @@ def main(ctx: click.Context) -> None:
 @main.command()
 @click.argument("domain")
 @click.option("--no-history", is_flag=True, default=False, help="Skip Wayback Machine history lookup.")
+@click.option(
+    "--check-handles",
+    "check_handles_flag",
+    is_flag=True,
+    default=False,
+    help="Also check same-name availability on GitHub / npm / PyPI / X / Instagram.",
+)
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON instead of a rich table.")
-def check(domain: str, no_history: bool, as_json: bool) -> None:
+def check(domain: str, no_history: bool, check_handles_flag: bool, as_json: bool) -> None:
     """Run all enabled checks on DOMAIN and emit a verdict."""
     basic = check_basic(domain)
     history = None if no_history else check_history(domain)
+    handles = check_handles(domain) if check_handles_flag else None
     verdict = aggregate(basic, history)
 
     if as_json:
-        _emit_json(_payload(domain, basic, history, verdict))
+        _emit_json(_payload(domain, basic, history, handles, verdict))
     else:
-        _render_verdict(domain, basic, history, verdict)
+        _render_verdict(domain, basic, history, handles, verdict)
 
     sys.exit(EXIT_CODES[verdict.band])
 
@@ -146,6 +189,26 @@ def history(domain: str, as_json: bool) -> None:
     console.print(f"first_seen={h.first_seen}  last_seen={h.last_seen}  span_days={h.age_days}")
     _emit_lines("Notes", h.notes)
     _emit_lines("Issues", h.issues, style="bold red")
+
+
+@main.command()
+@click.argument("domain")
+@click.option(
+    "--platforms",
+    default=None,
+    help="Comma-separated subset of platforms (default: github,npm,pypi,twitter,instagram).",
+)
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
+def handles(domain: str, platforms: str | None, as_json: bool) -> None:
+    """Check same-name handle availability across developer platforms and social networks."""
+    selected = [p.strip() for p in platforms.split(",")] if platforms else None
+    h = check_handles(domain, platforms=selected)
+    if as_json:
+        _emit_json({"domain": h.domain, "handles": asdict(h)})
+        return
+
+    console.print(_handles_table(h))
+    _emit_lines("Notes", h.notes, style="bold")
 
 
 @main.command()
