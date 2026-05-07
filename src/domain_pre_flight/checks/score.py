@@ -7,6 +7,7 @@ from enum import Enum
 
 from .basic import BasicReport, tld_risk_for
 from .history import HistoryReport
+from .idn_homograph import HomographReport
 from .llmo import LlmoReport
 from .semantics import SemanticsReport
 from .trademark import TrademarkReport
@@ -141,6 +142,19 @@ def _llmo_deductions(report: LlmoReport) -> list[tuple[str, int]]:
     return []
 
 
+def _homograph_deductions(report: HomographReport) -> list[tuple[str, int]]:
+    if report.severity == "brand_collision":
+        return [
+            (
+                f"IDN homograph collision with brand '{report.brand_collision}'",
+                75,
+            )
+        ]
+    if report.severity == "confusable":
+        return [("IDN with confusable characters (no brand collision found)", 15)]
+    return []
+
+
 def aggregate(
     basic: BasicReport,
     history: HistoryReport | None = None,
@@ -148,6 +162,7 @@ def aggregate(
     trademark: TrademarkReport | None = None,
     semantics: SemanticsReport | None = None,
     llmo: LlmoReport | None = None,
+    homograph: HomographReport | None = None,
 ) -> Verdict:
     deductions = _basic_deductions(basic)
     if history is not None:
@@ -160,6 +175,8 @@ def aggregate(
         deductions.extend(_semantics_deductions(semantics))
     if llmo is not None:
         deductions.extend(_llmo_deductions(llmo))
+    if homograph is not None:
+        deductions.extend(_homograph_deductions(homograph))
 
     total = min(100, sum(points for _, points in deductions))
     score = max(0, 100 - total)

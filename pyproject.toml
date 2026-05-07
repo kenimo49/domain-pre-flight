@@ -23,6 +23,8 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.1",
+    "confusable-homoglyphs>=3.3",
+    "dnspython>=2.6",
     "Levenshtein>=0.25",
     "requests>=2.31",
     "rich>=13.7",
