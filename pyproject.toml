@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "domain-pre-flight"
+version = "0.1.0"
+description = "Pre-flight checks before registering a domain for a new site or app: basic name checks, past content history, risk scoring."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Ken Imoto" }]
+requires-python = ">=3.10"
+keywords = ["domain", "dns", "seo", "pre-flight", "wayback", "domain-registration"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: Name Service (DNS)",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "click>=8.1",
+    "requests>=2.31",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+    "ruff>=0.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/kenimo49/domain-pre-flight"
+Repository = "https://github.com/kenimo49/domain-pre-flight"
+Issues = "https://github.com/kenimo49/domain-pre-flight/issues"
+
+[project.scripts]
+domain-pre-flight = "domain_pre_flight.cli:main"
+dpf = "domain_pre_flight.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/domain_pre_flight"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
