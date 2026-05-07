@@ -1,0 +1,41 @@
+name: refresh-tld-risk
+
+on:
+  schedule:
+    # First Monday of each month at 03:00 UTC.
+    - cron: "0 3 1-7 * 1"
+  workflow_dispatch: {}
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install runtime deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Refresh TLD risk bundle
+        run: python scripts/refresh_tld_risk.py
+
+      - name: Open PR if data changed
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "data: refresh tld_risk.json"
+          title: "data: refresh tld_risk.json (auto)"
+          body: |
+            Automated monthly refresh of `src/domain_pre_flight/data/tld_risk.json`.
+            Re-run locally with `python scripts/refresh_tld_risk.py`.
+          branch: auto/tld-risk-refresh
+          delete-branch: true

@@ -1,20 +1,22 @@
 """Basic syntactic / structural checks for a domain name.
 
-Deterministic, offline, no external network calls. The TLD risk *table* lives
-here as raw data; how that table is converted into score deductions lives in
-``score.py``.
+Deterministic, offline, no external network calls. The TLD risk *table* is
+loaded from a refreshable JSON bundle (``data/tld_risk.json``) so that
+``scripts/refresh_tld_risk.py`` can update it without touching code; the
+table converts into score deductions in ``score.py``.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
+from importlib.resources import files
 
 import tldextract
 
-# Per-TLD abuse-risk hint, sourced from Spamhaus "Top 10 Most Abused TLDs"
-# and Interisle abuse studies. 0 = trusted, 70+ = heavily abused.
-TLD_RISK = {
+# Embedded fallback used when the JSON bundle is missing or corrupt.
+_FALLBACK_TLD_RISK = {
     "com": 0, "net": 0, "org": 0, "io": 0, "dev": 0, "ai": 0, "co": 5,
     "jp": 0, "uk": 0, "de": 0, "fr": 0, "us": 5,
     "app": 5, "blog": 5, "tech": 10,
@@ -23,6 +25,21 @@ TLD_RISK = {
     "loan": 60, "work": 35, "icu": 50, "live": 25,
     "cf": 70, "ga": 70, "ml": 70, "tk": 70, "gq": 70,
 }
+
+
+def _load_tld_risk() -> dict[str, int]:
+    try:
+        path = files("domain_pre_flight.data") / "tld_risk.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        risk = data.get("risk")
+        if isinstance(risk, dict) and risk:
+            return {str(k).lower(): int(v) for k, v in risk.items()}
+    except (FileNotFoundError, json.JSONDecodeError, ValueError, TypeError, ModuleNotFoundError):
+        pass
+    return dict(_FALLBACK_TLD_RISK)
+
+
+TLD_RISK = _load_tld_risk()
 
 LABEL_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", re.IGNORECASE)
 

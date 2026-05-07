@@ -103,7 +103,7 @@ The features below are planned but **not yet implemented**. Order is rough; PRs 
 ### Medium-term — quality-of-life and global readiness
 
 4. ~~**Multi-language negative-meaning check** — scan the SLD against major languages (EN / ZH / ES / PT / KO / JA) for slurs, vulgarities, or unfortunate readings.~~ **Shipped in v0.5** — `dpf semantics` (default ON in `dpf check`, disable with `--no-semantics`). Word lists live at `data/negative_meanings/<lang>.txt` and accept community PRs with citations.
-5. **Per-TLD default risk score (deeper)** ([#5](https://github.com/kenimo49/domain-pre-flight/issues/5)) — extend the TLD table to use live Spamhaus / SURBL feed data instead of the static table currently shipped.
+5. ~~**Per-TLD default risk score (deeper)** — extend the TLD table to use live Spamhaus / SURBL feed data instead of the static table.~~ **Refactored in v0.6** — TLD-risk table now lives at `data/tld_risk.json` and is loaded at runtime, with the embedded dict as a graceful fallback. `scripts/refresh_tld_risk.py` is the entry point; a monthly GitHub Actions workflow opens an auto-PR. Live feed integration (Interisle / DAAR) is currently a no-op stub — the script writes the curated baseline if no live source is available, so the bundle is always valid.
 6. **Pronunciation / memorability heuristics (LLMO fitness)** ([#6](https://github.com/kenimo49/domain-pre-flight/issues/6)) — score how easily the domain can be dictated, spelled-back over voice, and recognised by AI search assistants.
 
 ### Opt-in — paid-API features (default OFF, not yet implemented)
