@@ -1,5 +1,8 @@
 # domain-pre-flight
 
+[![test](https://github.com/kenimo49/domain-pre-flight/actions/workflows/test.yml/badge.svg)](https://github.com/kenimo49/domain-pre-flight/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 > ⚠️ **Status: experimental / under active validation.**
 > Heuristics, score weights, and thresholds are still being calibrated against real-world domain decisions.
 > Use it as one input — not the only one — when deciding whether to register a domain.
@@ -106,8 +109,15 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 
+# Unit tests
 pytest -q
+
+# CLI smoke tests (offline mode skips the Wayback network call)
+bash scripts/smoke.sh --offline
+bash scripts/smoke.sh             # full run, hits Wayback Machine
 ```
+
+CI runs `pytest` against Python 3.10 / 3.11 / 3.12 plus the offline smoke suite on every push and PR.
 
 ## License
 
