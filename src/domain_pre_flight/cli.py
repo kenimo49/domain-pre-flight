@@ -14,6 +14,7 @@ from rich.table import Table
 from .checks.basic import BasicReport, check_basic
 from .checks.handles import HandleReport, check_handles
 from .checks.history import HistoryReport, check_history
+from .checks.llmo import LlmoReport, check_llmo
 from .checks.score import EXIT_CODES, Band, Verdict, aggregate
 from .checks.semantics import SUPPORTED_LANGUAGES, SemanticsReport, check_semantics
 from .checks.trademark import TrademarkReport, check_trademark
@@ -54,6 +55,18 @@ def _basic_table(basic: BasicReport) -> Table:
     table.add_row("hyphens / digits", f"{basic.hyphens} / {basic.digits}")
     table.add_row("IDN / punycode", "yes" if basic.has_idn else "no")
     table.add_row("syntax valid", "yes" if basic.is_valid_syntax else "NO")
+    return table
+
+
+def _llmo_table(llmo: LlmoReport) -> Table:
+    table = Table(title=f"LLMO fitness for '{llmo.sld}' (experimental)", show_header=True, header_style="bold")
+    table.add_column("Axis")
+    table.add_column("Score", justify="right")
+    table.add_row("cluster (consonant runs)", f"{llmo.cluster_score}/5")
+    table.add_row("vowel (ratio)", f"{llmo.vowel_score}/5")
+    table.add_row("length (4-9 chars optimal)", f"{llmo.length_score}/5")
+    table.add_row("repeats (no long runs)", f"{llmo.repeats_score}/5")
+    table.add_row("[bold]total[/]", f"[bold]{llmo.fitness}/20 ({llmo.band})[/]")
     return table
 
 
@@ -130,6 +143,7 @@ def _render_verdict(
     typo: TyposquatReport | None,
     trademark: TrademarkReport | None,
     semantics: SemanticsReport | None,
+    llmo: LlmoReport | None,
     verdict: Verdict,
 ) -> None:
     console.print(
@@ -165,6 +179,11 @@ def _render_verdict(
         _emit_lines("Semantics issues", semantics.issues, style="bold red")
         _emit_lines("Semantics notes", semantics.notes, style="bold")
 
+    if llmo is not None:
+        console.print(_llmo_table(llmo))
+        _emit_lines("LLMO issues", llmo.issues, style="bold red")
+        _emit_lines("LLMO notes", llmo.notes, style="bold")
+
     if verdict.deductions:
         dt = Table(title="Score deductions", show_header=True, header_style="bold")
         dt.add_column("Reason")
@@ -182,6 +201,7 @@ def _payload(
     typo: TyposquatReport | None,
     trademark: TrademarkReport | None,
     semantics: SemanticsReport | None,
+    llmo: LlmoReport | None,
     verdict: Verdict | None,
 ) -> dict[str, Any]:
     return {
@@ -202,6 +222,7 @@ def _payload(
         "typosquat": None if typo is None else asdict(typo),
         "trademark": None if trademark is None else asdict(trademark),
         "semantics": None if semantics is None else asdict(semantics),
+        "llmo": None if llmo is None else asdict(llmo),
     }
 
 
@@ -257,6 +278,12 @@ def main(ctx: click.Context) -> None:
     default=",".join(SUPPORTED_LANGUAGES),
     help=f"Comma-separated language codes for the semantics scan (default: {','.join(SUPPORTED_LANGUAGES)}).",
 )
+@click.option(
+    "--no-llmo",
+    is_flag=True,
+    default=False,
+    help="Skip pronunciation / memorability (LLMO fitness) heuristic.",
+)
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON instead of a rich table.")
 def check(
     domain: str,
@@ -267,6 +294,7 @@ def check(
     trademark_jurisdictions: str,
     no_semantics: bool,
     languages: str,
+    no_llmo: bool,
     as_json: bool,
 ) -> None:
     """Run all enabled checks on DOMAIN and emit a verdict."""
@@ -284,12 +312,13 @@ def check(
         if no_semantics
         else check_semantics(domain, languages=[l.strip() for l in languages.split(",")])
     )
-    verdict = aggregate(basic, history, typo, trademark, semantics)
+    llmo = None if no_llmo else check_llmo(domain)
+    verdict = aggregate(basic, history, typo, trademark, semantics, llmo)
 
     if as_json:
-        _emit_json(_payload(domain, basic, history, handles, typo, trademark, semantics, verdict))
+        _emit_json(_payload(domain, basic, history, handles, typo, trademark, semantics, llmo, verdict))
     else:
-        _render_verdict(domain, basic, history, handles, typo, trademark, semantics, verdict)
+        _render_verdict(domain, basic, history, handles, typo, trademark, semantics, llmo, verdict)
 
     sys.exit(EXIT_CODES[verdict.band])
 
@@ -308,6 +337,21 @@ def history(domain: str, as_json: bool) -> None:
     console.print(f"first_seen={h.first_seen}  last_seen={h.last_seen}  span_days={h.age_days}")
     _emit_lines("Notes", h.notes)
     _emit_lines("Issues", h.issues, style="bold red")
+
+
+@main.command()
+@click.argument("domain")
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
+def llmo(domain: str, as_json: bool) -> None:
+    """Show only the LLMO fitness (pronunciation / memorability) for DOMAIN."""
+    l = check_llmo(domain)
+    if as_json:
+        _emit_json({"domain": l.domain, "llmo": asdict(l)})
+        return
+
+    console.print(_llmo_table(l))
+    _emit_lines("Issues", l.issues, style="bold red")
+    _emit_lines("Notes", l.notes, style="bold")
 
 
 @main.command()

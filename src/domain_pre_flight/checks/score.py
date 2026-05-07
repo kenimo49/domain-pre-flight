@@ -7,6 +7,7 @@ from enum import Enum
 
 from .basic import BasicReport, tld_risk_for
 from .history import HistoryReport
+from .llmo import LlmoReport
 from .semantics import SemanticsReport
 from .trademark import TrademarkReport
 from .typosquat import TyposquatReport
@@ -135,12 +136,23 @@ def _semantics_deductions(report: SemanticsReport) -> list[tuple[str, int]]:
     return []
 
 
+def _llmo_deductions(report: LlmoReport) -> list[tuple[str, int]]:
+    if report.fitness == 0 and not report.sld:
+        return []
+    if report.band == "poor":
+        return [(f"LLMO fitness {report.fitness}/20 (poor — voice/memorability friction)", 10)]
+    if report.band == "ok":
+        return [(f"LLMO fitness {report.fitness}/20 (ok — minor friction)", 3)]
+    return []
+
+
 def aggregate(
     basic: BasicReport,
     history: HistoryReport | None = None,
     typosquat: TyposquatReport | None = None,
     trademark: TrademarkReport | None = None,
     semantics: SemanticsReport | None = None,
+    llmo: LlmoReport | None = None,
 ) -> Verdict:
     deductions = _basic_deductions(basic)
     if history is not None:
@@ -151,6 +163,8 @@ def aggregate(
         deductions.extend(_trademark_deductions(trademark))
     if semantics is not None:
         deductions.extend(_semantics_deductions(semantics))
+    if llmo is not None:
+        deductions.extend(_llmo_deductions(llmo))
 
     total = min(100, sum(points for _, points in deductions))
     score = max(0, 100 - total)

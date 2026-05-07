@@ -24,6 +24,7 @@ It is **not** a domain investing / drop-catching tool. It is the last-mile check
 | Typosquat / brand similarity | Levenshtein distance + homoglyph/bigram heuristics against ~120 widely-recognised brand stems     | bundled list, offline       |
 | Trademark conflict (opt-in) | USPTO + EUIPO TMview search, J-PlatPat deeplink for manual review                                  | public registries, no auth  |
 | Multi-language semantics    | Negative-meaning scan across EN / ES / PT / JA / KO / ZH (curated bundled lists)                    | bundled lists, offline      |
+| LLMO fitness (experimental) | Pronunciation / memorability heuristic (cluster, vowel ratio, length, repeats) — 0–20 score          | offline heuristics          |
 | Aggregate verdict          | 0–100 score, 4 bands (GREEN / YELLOW / ORANGE / RED), itemised deductions                           | derived           |
 
 The CLI exits with `0` on GREEN/YELLOW, `1` on ORANGE, `2` on RED — convenient for CI gating in domain-procurement scripts.
@@ -67,6 +68,9 @@ domain-pre-flight trademark example.com --jurisdictions us,eu
 # Multi-language negative-meaning scan
 domain-pre-flight semantics shineyo.com --languages ja
 
+# LLMO fitness — pronunciation / memorability heuristic (experimental)
+domain-pre-flight llmo apple.com
+
 # Basic structural checks only
 domain-pre-flight basic example.com
 
@@ -104,7 +108,7 @@ The features below are planned but **not yet implemented**. Order is rough; PRs 
 
 4. ~~**Multi-language negative-meaning check** — scan the SLD against major languages (EN / ZH / ES / PT / KO / JA) for slurs, vulgarities, or unfortunate readings.~~ **Shipped in v0.5** — `dpf semantics` (default ON in `dpf check`, disable with `--no-semantics`). Word lists live at `data/negative_meanings/<lang>.txt` and accept community PRs with citations.
 5. ~~**Per-TLD default risk score (deeper)** — extend the TLD table to use live Spamhaus / SURBL feed data instead of the static table.~~ **Refactored in v0.6** — TLD-risk table now lives at `data/tld_risk.json` and is loaded at runtime, with the embedded dict as a graceful fallback. `scripts/refresh_tld_risk.py` is the entry point; a monthly GitHub Actions workflow opens an auto-PR. Live feed integration (Interisle / DAAR) is currently a no-op stub — the script writes the curated baseline if no live source is available, so the bundle is always valid.
-6. **Pronunciation / memorability heuristics (LLMO fitness)** ([#6](https://github.com/kenimo49/domain-pre-flight/issues/6)) — score how easily the domain can be dictated, spelled-back over voice, and recognised by AI search assistants.
+6. ~~**Pronunciation / memorability heuristics (LLMO fitness)** — score how easily the domain can be dictated, spelled-back over voice, and recognised by AI search assistants.~~ **Shipped in v0.7** — `dpf llmo` (default ON in `dpf check`, disable with `--no-llmo`). 0–20 fitness score across four axes (cluster / vowel / length / repeats); marked **experimental** in output because the heuristics are subjective and English-leaning.
 
 ### Opt-in — paid-API features (default OFF, not yet implemented)
 
