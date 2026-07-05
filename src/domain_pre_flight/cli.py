@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import sys
-from dataclasses import asdict
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
 from typing import Any
 
 import click
@@ -178,72 +179,54 @@ def _history_table(history: HistoryReport) -> Table:
     return table
 
 
-def _render_verdict(
-    domain: str,
-    basic: BasicReport,
-    history: HistoryReport | None,
-    handles: HandleReport | None,
-    typo: TyposquatReport | None,
-    trademark: TrademarkReport | None,
-    semantics: SemanticsReport | None,
-    llmo: LlmoReport | None,
-    homograph: HomographReport | None,
-    rdap: RdapReport | None,
-    dns_sanity: DnsSanityReport | None,
-    verdict: Verdict,
-) -> None:
+@dataclass
+class CheckResults:
+    """Per-section reports produced by the aggregate `check` subcommand."""
+
+    basic: BasicReport
+    history: HistoryReport | None = None
+    handles: HandleReport | None = None
+    typosquat: TyposquatReport | None = None
+    trademark: TrademarkReport | None = None
+    semantics: SemanticsReport | None = None
+    llmo: LlmoReport | None = None
+    homograph: HomographReport | None = None
+    rdap: RdapReport | None = None
+    dns_sanity: DnsSanityReport | None = None
+
+
+# (attribute on CheckResults, label prefix for issues/notes, table renderer,
+#  optional predicate deciding whether a present report is worth showing)
+_SECTIONS: tuple[tuple[str, str, Callable[[Any], Table], Callable[[Any], bool] | None], ...] = (
+    ("history", "History", _history_table, None),
+    ("handles", "Handle", _handles_table, None),
+    ("typosquat", "Typosquat", _typosquat_table, None),
+    ("trademark", "Trademark", _trademark_table, None),
+    ("semantics", "Semantics", _semantics_table, None),
+    ("llmo", "LLMO", _llmo_table, None),
+    ("homograph", "Homograph", _homograph_table, lambda r: r.is_idn or r.severity != "clean"),
+    ("rdap", "RDAP", _rdap_table, None),
+    ("dns_sanity", "DNS", _dns_sanity_table, None),
+)
+
+
+def _render_verdict(domain: str, results: CheckResults, verdict: Verdict) -> None:
     console.print(
         f"\n[bold]{domain}[/bold]  →  "
         f"[{_BAND_STYLES[verdict.band]}]{verdict.band.value}[/]  "
         f"score=[bold]{verdict.score}[/]/100  — {verdict.summary}\n"
     )
-    console.print(_basic_table(basic))
-    _emit_lines("Issues", basic.issues, style="bold red")
-    _emit_lines("Notes", basic.notes, style="bold")
+    console.print(_basic_table(results.basic))
+    _emit_lines("Issues", results.basic.issues, style="bold red")
+    _emit_lines("Notes", results.basic.notes, style="bold")
 
-    if history is not None:
-        console.print(_history_table(history))
-        _emit_lines("History issues", history.issues, style="bold red")
-        _emit_lines("History notes", history.notes, style="bold")
-
-    if handles is not None:
-        console.print(_handles_table(handles))
-        _emit_lines("Handle notes", handles.notes, style="bold")
-
-    if typo is not None:
-        console.print(_typosquat_table(typo))
-        _emit_lines("Typosquat issues", typo.issues, style="bold red")
-        _emit_lines("Typosquat notes", typo.notes, style="bold")
-
-    if trademark is not None:
-        console.print(_trademark_table(trademark))
-        _emit_lines("Trademark issues", trademark.issues, style="bold red")
-        _emit_lines("Trademark notes", trademark.notes, style="bold")
-
-    if semantics is not None:
-        console.print(_semantics_table(semantics))
-        _emit_lines("Semantics issues", semantics.issues, style="bold red")
-        _emit_lines("Semantics notes", semantics.notes, style="bold")
-
-    if llmo is not None:
-        console.print(_llmo_table(llmo))
-        _emit_lines("LLMO issues", llmo.issues, style="bold red")
-        _emit_lines("LLMO notes", llmo.notes, style="bold")
-
-    if homograph is not None and (homograph.is_idn or homograph.severity != "clean"):
-        console.print(_homograph_table(homograph))
-        _emit_lines("Homograph issues", homograph.issues, style="bold red")
-        _emit_lines("Homograph notes", homograph.notes, style="bold")
-
-    if rdap is not None:
-        console.print(_rdap_table(rdap))
-        _emit_lines("RDAP issues", rdap.issues, style="bold red")
-        _emit_lines("RDAP notes", rdap.notes, style="bold")
-
-    if dns_sanity is not None:
-        console.print(_dns_sanity_table(dns_sanity))
-        _emit_lines("DNS issues", dns_sanity.issues, style="bold red")
-        _emit_lines("DNS notes", dns_sanity.notes, style="bold")
+    for attr, label, table_fn, predicate in _SECTIONS:
+        report = getattr(results, attr)
+        if report is None or (predicate is not None and not predicate(report)):
+            continue
+        console.print(table_fn(report))
+        _emit_lines(f"{label} issues", getattr(report, "issues", []), style="bold red")
+        _emit_lines(f"{label} notes", report.notes, style="bold")
 
     if verdict.deductions:
         dt = Table(title="Score deductions", show_header=True, header_style="bold")
@@ -254,21 +237,8 @@ def _render_verdict(
         console.print(dt)
 
 
-def _payload(
-    domain: str,
-    basic: BasicReport,
-    history: HistoryReport | None,
-    handles: HandleReport | None,
-    typo: TyposquatReport | None,
-    trademark: TrademarkReport | None,
-    semantics: SemanticsReport | None,
-    llmo: LlmoReport | None,
-    homograph: HomographReport | None,
-    rdap: RdapReport | None,
-    dns_sanity: DnsSanityReport | None,
-    verdict: Verdict | None,
-) -> dict[str, Any]:
-    return {
+def _payload(domain: str, results: CheckResults, verdict: Verdict | None) -> dict[str, Any]:
+    payload: dict[str, Any] = {
         "domain": domain,
         "verdict": (
             None
@@ -280,17 +250,12 @@ def _payload(
                 "deductions": [{"reason": r, "points": p} for r, p in verdict.deductions],
             }
         ),
-        "basic": {**asdict(basic), "length": basic.length},
-        "history": None if history is None else asdict(history),
-        "handles": None if handles is None else asdict(handles),
-        "typosquat": None if typo is None else asdict(typo),
-        "trademark": None if trademark is None else asdict(trademark),
-        "semantics": None if semantics is None else asdict(semantics),
-        "llmo": None if llmo is None else asdict(llmo),
-        "homograph": None if homograph is None else asdict(homograph),
-        "rdap": None if rdap is None else asdict(rdap),
-        "dns_sanity": None if dns_sanity is None else asdict(dns_sanity),
+        "basic": {**asdict(results.basic), "length": results.basic.length},
     }
+    for attr, _label, _table_fn, _predicate in _SECTIONS:
+        report = getattr(results, attr)
+        payload[attr] = None if report is None else asdict(report)
+    return payload
 
 
 def _emit_json(payload: dict[str, Any]) -> None:
@@ -303,6 +268,15 @@ def _emit_single(section: str, report: Any, as_json: bool) -> bool:
         _emit_json({"domain": report.domain, section: asdict(report)})
         return True
     return False
+
+
+def _emit_report(section: str, report: Any, table_fn: Callable[[Any], Table], as_json: bool) -> None:
+    """Render a single-section subcommand: JSON, or table + issues + notes."""
+    if _emit_single(section, report, as_json):
+        return
+    console.print(table_fn(report))
+    _emit_lines("Issues", getattr(report, "issues", []), style="bold red")
+    _emit_lines("Notes", report.notes, style="bold")
 
 
 def _split_csv(s: str | None) -> list[str] | None:
@@ -410,30 +384,42 @@ def check(
     as_json: bool,
 ) -> None:
     """Run all enabled checks on DOMAIN and emit a verdict."""
-    basic = check_basic(domain)
-    history = None if no_history else check_history(domain)
-    handles = check_handles(domain) if check_handles_flag else None
-    typo = None if no_typosquat else check_typosquat(domain)
-    trademark = (
-        check_trademark(domain, jurisdictions=_split_csv(trademark_jurisdictions))
-        if check_trademark_flag
-        else None
+    results = CheckResults(
+        basic=check_basic(domain),
+        history=None if no_history else check_history(domain),
+        handles=check_handles(domain) if check_handles_flag else None,
+        typosquat=None if no_typosquat else check_typosquat(domain),
+        trademark=(
+            check_trademark(domain, jurisdictions=_split_csv(trademark_jurisdictions))
+            if check_trademark_flag
+            else None
+        ),
+        semantics=(
+            None
+            if no_semantics
+            else check_semantics(domain, languages=_split_csv(languages))
+        ),
+        llmo=None if no_llmo else check_llmo(domain, locale=llmo_locale),  # type: ignore[arg-type]
+        homograph=None if no_homograph else check_idn_homograph(domain),
+        rdap=check_rdap(domain) if check_rdap_flag else None,
+        dns_sanity=check_dns_sanity(domain) if check_dns_flag else None,
     )
-    semantics = (
-        None
-        if no_semantics
-        else check_semantics(domain, languages=_split_csv(languages))
+    verdict = aggregate(
+        results.basic,
+        results.history,
+        results.typosquat,
+        results.trademark,
+        results.semantics,
+        results.llmo,
+        results.homograph,
+        results.rdap,
+        results.dns_sanity,
     )
-    llmo = None if no_llmo else check_llmo(domain, locale=llmo_locale)  # type: ignore[arg-type]
-    homograph = None if no_homograph else check_idn_homograph(domain)
-    rdap = check_rdap(domain) if check_rdap_flag else None
-    dns_sanity = check_dns_sanity(domain) if check_dns_flag else None
-    verdict = aggregate(basic, history, typo, trademark, semantics, llmo, homograph, rdap, dns_sanity)
 
     if as_json:
-        _emit_json(_payload(domain, basic, history, handles, typo, trademark, semantics, llmo, homograph, rdap, dns_sanity, verdict))
+        _emit_json(_payload(domain, results, verdict))
     else:
-        _render_verdict(domain, basic, history, handles, typo, trademark, semantics, llmo, homograph, rdap, dns_sanity, verdict)
+        _render_verdict(domain, results, verdict)
 
     sys.exit(EXIT_CODES[verdict.band])
 
@@ -484,13 +470,7 @@ def permutations(domain: str, limit: int | None, kind: str | None, as_json: bool
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
 def dns(domain: str, as_json: bool) -> None:
     """Probe MX / SPF / DMARC / DKIM presence for DOMAIN."""
-    report = check_dns_sanity(domain)
-    if _emit_single("dns_sanity", report, as_json):
-        return
-
-    console.print(_dns_sanity_table(report))
-    _emit_lines("Issues", report.issues, style="bold red")
-    _emit_lines("Notes", report.notes, style="bold")
+    _emit_report("dns_sanity", check_dns_sanity(domain), _dns_sanity_table, as_json)
 
 
 @main.command()
@@ -498,13 +478,7 @@ def dns(domain: str, as_json: bool) -> None:
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
 def rdap(domain: str, as_json: bool) -> None:
     """Query RDAP for domain age, expiry, registrar, and registry status."""
-    report = check_rdap(domain)
-    if _emit_single("rdap", report, as_json):
-        return
-
-    console.print(_rdap_table(report))
-    _emit_lines("Issues", report.issues, style="bold red")
-    _emit_lines("Notes", report.notes, style="bold")
+    _emit_report("rdap", check_rdap(domain), _rdap_table, as_json)
 
 
 @main.command()
@@ -512,13 +486,7 @@ def rdap(domain: str, as_json: bool) -> None:
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
 def homograph(domain: str, as_json: bool) -> None:
     """Detect whether the SLD visually mimics a known Latin brand (UTS #39)."""
-    report = check_idn_homograph(domain)
-    if _emit_single("homograph", report, as_json):
-        return
-
-    console.print(_homograph_table(report))
-    _emit_lines("Issues", report.issues, style="bold red")
-    _emit_lines("Notes", report.notes, style="bold")
+    _emit_report("homograph", check_idn_homograph(domain), _homograph_table, as_json)
 
 
 @main.command()
@@ -533,12 +501,7 @@ def homograph(domain: str, as_json: bool) -> None:
 def llmo(domain: str, llmo_locale: str, as_json: bool) -> None:
     """Show only the LLMO fitness (pronunciation / memorability) for DOMAIN."""
     report = check_llmo(domain, locale=llmo_locale)  # type: ignore[arg-type]
-    if _emit_single("llmo", report, as_json):
-        return
-
-    console.print(_llmo_table(report))
-    _emit_lines("Issues", report.issues, style="bold red")
-    _emit_lines("Notes", report.notes, style="bold")
+    _emit_report("llmo", report, _llmo_table, as_json)
 
 
 @main.command()
@@ -552,12 +515,7 @@ def llmo(domain: str, llmo_locale: str, as_json: bool) -> None:
 def semantics(domain: str, languages: str, as_json: bool) -> None:
     """Scan the SLD for negative-meaning terms across major languages."""
     report = check_semantics(domain, languages=_split_csv(languages))
-    if _emit_single("semantics", report, as_json):
-        return
-
-    console.print(_semantics_table(report))
-    _emit_lines("Issues", report.issues, style="bold red")
-    _emit_lines("Notes", report.notes, style="bold")
+    _emit_report("semantics", report, _semantics_table, as_json)
 
 
 @main.command()
@@ -567,12 +525,7 @@ def semantics(domain: str, languages: str, as_json: bool) -> None:
 def trademark(domain: str, jurisdictions: str, as_json: bool) -> None:
     """Query trademark registries for marks similar to the SLD."""
     report = check_trademark(domain, jurisdictions=_split_csv(jurisdictions))
-    if _emit_single("trademark", report, as_json):
-        return
-
-    console.print(_trademark_table(report))
-    _emit_lines("Issues", report.issues, style="bold red")
-    _emit_lines("Notes", report.notes, style="bold")
+    _emit_report("trademark", report, _trademark_table, as_json)
 
 
 @main.command()
@@ -580,13 +533,7 @@ def trademark(domain: str, jurisdictions: str, as_json: bool) -> None:
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON.")
 def typosquat(domain: str, as_json: bool) -> None:
     """Show only the typosquat / brand-similarity check for DOMAIN."""
-    report = check_typosquat(domain)
-    if _emit_single("typosquat", report, as_json):
-        return
-
-    console.print(_typosquat_table(report))
-    _emit_lines("Issues", report.issues, style="bold red")
-    _emit_lines("Notes", report.notes, style="bold")
+    _emit_report("typosquat", check_typosquat(domain), _typosquat_table, as_json)
 
 
 @main.command()
@@ -600,11 +547,7 @@ def typosquat(domain: str, as_json: bool) -> None:
 def handles(domain: str, platforms: str | None, as_json: bool) -> None:
     """Check same-name handle availability across developer platforms and social networks."""
     report = check_handles(domain, platforms=_split_csv(platforms))
-    if _emit_single("handles", report, as_json):
-        return
-
-    console.print(_handles_table(report))
-    _emit_lines("Notes", report.notes, style="bold")
+    _emit_report("handles", report, _handles_table, as_json)
 
 
 @main.command()
