@@ -23,7 +23,7 @@ def test_tld_risk_for_unknown_returns_default():
     assert tld_risk_for("not-a-real-tld-xxx") == 25
 
 
-def test_load_falls_back_when_corrupt(tmp_path, monkeypatch):
+def test_load_falls_back_when_corrupt(monkeypatch):
     # If the JSON file becomes invalid, the loader silently falls back to
     # the embedded dict. Simulate by pointing the loader at a missing
     # resource.
