@@ -23,6 +23,7 @@ from .checks.rdap import RdapReport, check_rdap
 from .checks.score import EXIT_CODES, Band, Verdict, aggregate
 from .checks.semantics import SUPPORTED_LANGUAGES, SemanticsReport, check_semantics
 from .checks.trademark import TrademarkReport, check_trademark
+from .checks.suggest import SuggestReport, check_suggest
 from .checks.typosquat import TyposquatReport, check_typosquat
 
 _HANDLE_STATUS_STYLES = {
@@ -164,6 +165,33 @@ def _handles_table(handles: HandleReport) -> Table:
     for r in handles.results:
         style = _HANDLE_STATUS_STYLES.get(r.status, "")
         table.add_row(r.platform, f"[{style}]{r.status}[/]" if style else r.status, r.detail or "-")
+    return table
+
+
+def _suggest_table(report: SuggestReport) -> Table:
+    table = Table(
+        title=f"📡 Related domain suggestions for '{report.source_sld}'",
+        show_header=True,
+        header_style="bold",
+    )
+    table.add_column("domain")
+    table.add_column(".com", justify="center")
+    table.add_column("HN 30d", justify="right")
+    table.add_column("signal", justify="center")
+    for c in report.candidates:
+        if c.available is True:
+            avail = "[bold green]✅ free[/]"
+            mentions = str(c.hn_mentions_30d)
+            sig = c.signal
+        elif c.available is False:
+            avail = "[dim]❌ taken[/]"
+            mentions = "-"
+            sig = ""
+        else:
+            avail = "[yellow]? unknown[/]"
+            mentions = "-"
+            sig = ""
+        table.add_row(c.domain, avail, mentions, sig)
     return table
 
 
@@ -366,6 +394,23 @@ def main(ctx: click.Context) -> None:
     default=False,
     help="Also probe MX / SPF / DMARC / DKIM presence (DNS lookups, ~5s).",
 )
+@click.option(
+    "--suggest",
+    "suggest_flag",
+    is_flag=True,
+    default=False,
+    help=(
+        "After the verdict, suggest related emerging-term .com domains with Hacker News trend signals. "
+        "Requires ANTHROPIC_API_KEY and: pip install domain-pre-flight[suggest]"
+    ),
+)
+@click.option(
+    "--suggest-count",
+    type=int,
+    default=5,
+    show_default=True,
+    help="Number of domain suggestions to generate (used with --suggest).",
+)
 @click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON instead of a rich table.")
 def check(
     domain: str,
@@ -381,6 +426,8 @@ def check(
     no_homograph: bool,
     check_rdap_flag: bool,
     check_dns_flag: bool,
+    suggest_flag: bool,
+    suggest_count: int,
     as_json: bool,
 ) -> None:
     """Run all enabled checks on DOMAIN and emit a verdict."""
@@ -417,9 +464,22 @@ def check(
     )
 
     if as_json:
-        _emit_json(_payload(domain, results, verdict))
+        payload = _payload(domain, results, verdict)
+        if suggest_flag:
+            suggest = check_suggest(domain, count=suggest_count)
+            from dataclasses import asdict as _asdict  # noqa: PLC0415
+            payload["suggest"] = _asdict(suggest)
+        _emit_json(payload)
     else:
         _render_verdict(domain, results, verdict)
+        if suggest_flag:
+            suggest = check_suggest(domain, count=suggest_count)
+            console.print()
+            if suggest.issues:
+                _emit_lines("Suggest issues", suggest.issues, style="bold red")
+            elif suggest.candidates:
+                console.print(_suggest_table(suggest))
+                _emit_lines("Suggest notes", suggest.notes, style="bold")
 
     sys.exit(EXIT_CODES[verdict.band])
 
