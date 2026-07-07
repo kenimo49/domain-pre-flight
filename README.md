@@ -32,8 +32,8 @@ The CLI exits with `0` on GREEN/YELLOW, `1` on ORANGE, `2` on RED — convenient
 ## Install
 
 ```bash
-pip install domain-pre-flight        # not yet on PyPI — install from source while v0.1 is in flight
-# or, from a clone:
+pip install domain-pre-flight        # from PyPI
+# or, from a clone for development:
 pip install -e ".[dev]"
 ```
 
