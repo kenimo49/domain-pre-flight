@@ -2,6 +2,20 @@
 
 All notable changes to **domain-pre-flight** are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions follow [SemVer](https://semver.org/) with the convention that **0.x is experimental** — breaking changes can land on a minor bump.
 
+## [0.10.0] — 2026-07-07
+
+### Added
+
+- **`--suggest` flag** for `dpf check` — after the pre-flight verdict, generates related emerging-term `.com` domain candidates via Anthropic claude-haiku, checks each for RDAP availability (tri-state: free / taken / inconclusive), and surfaces a 30-day Hacker News mention count as a trend signal. Requires `pip install domain-pre-flight[suggest]` and `ANTHROPIC_API_KEY`. Gracefully degrades when either is absent.
+- **`--suggest-count N`** — controls how many candidates to generate (default 5, minimum 1).
+- **`suggest` optional extra** — `pip install domain-pre-flight[suggest]` pulls `anthropic>=0.25`.
+- **16 → 25 unit tests** for the suggest module: RDAP tri-state, HN signal thresholds, `_generate_terms` parse/sanitize, CLI integration (JSON payload, missing-key fallback, count validation).
+
+### Changed
+
+- `anthropic>=0.25` added to `dev` extra so the full test suite runs without installing `[suggest]` separately.
+- `--suggest-count` validated with `click.IntRange(min=1)`; `0` and negative values are rejected at the CLI layer.
+
 ## [0.9.0] — 2026-07-07
 
 ### Added
