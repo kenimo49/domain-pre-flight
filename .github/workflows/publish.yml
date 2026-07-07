@@ -1,15 +1,20 @@
-name: release
+name: publish
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 jobs:
-  publish:
+  build-and-publish:
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/domain-pre-flight
     permissions:
-      contents: write
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,11 +36,5 @@ jobs:
       - name: Verify package metadata
         run: twine check dist/*
 
-      - name: Upload to GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${GITHUB_REF##*/}" dist/* --clobber
-
-      # PyPI publishing is handled by publish.yml (Trusted Publisher / OIDC).
-      # This workflow only uploads the sdist + wheel to the GitHub Release.
+      - name: Publish to PyPI (Trusted Publisher OIDC)
+        uses: pypa/gh-action-pypi-publish@release/v1
