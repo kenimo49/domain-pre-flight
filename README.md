@@ -1,5 +1,7 @@
 # domain-pre-flight
 
+[![PyPI version](https://img.shields.io/pypi/v/domain-pre-flight.svg)](https://pypi.org/project/domain-pre-flight/)
+[![Python versions](https://img.shields.io/pypi/pyversions/domain-pre-flight.svg)](https://pypi.org/project/domain-pre-flight/)
 [![test](https://github.com/kenimo49/domain-pre-flight/actions/workflows/test.yml/badge.svg)](https://github.com/kenimo49/domain-pre-flight/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
