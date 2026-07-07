@@ -78,6 +78,34 @@ domain-pre-flight basic example.com
 dpf check example.com
 ```
 
+### MCP server (use it from Claude Code / Claude Desktop / Cursor)
+
+`domain-pre-flight` ships an MCP (Model Context Protocol) server so AI
+assistants can run the checks as tools:
+
+```bash
+pip install "domain-pre-flight[mcp]"
+claude mcp add domain-pre-flight -- domain-pre-flight-mcp
+```
+
+Then ask your assistant things like *"is `shineyo.dev` safe to register?"*
+or *"compare these three candidates and pick the safest."*
+
+Exposed tools (deliberately fewer than the CLI's subcommands — one tool per
+use case, not per flag):
+
+| Tool | What it answers |
+| ---- | --------------- |
+| `check_domain` | "Is this name safe to register?" — full verdict + section reports; slow checks opt-in via `include_handles` / `include_trademark` / `include_rdap` / `include_dns` |
+| `check_handles` | "Is the same name free on GitHub / npm / PyPI / X / Instagram?" |
+| `check_trademark` | "Any exact/contains trademark hits in US / EU / JP registries?" (mechanical pre-screen, not legal advice) |
+| `list_typo_permutations` | "What look-alike names could someone register against me?" |
+
+A deliberately naive subprocess-based variant lives in
+[`examples/subprocess-variant/`](examples/subprocess-variant/) as the
+"before" half of a security / latency comparison — do not use it in
+production.
+
 ### Example output
 
 ```
