@@ -16,7 +16,6 @@ Use this skill when the user:
 - explicitly asks "is this domain safe to register" / "can I take X.com" / "ドメイン取って大丈夫？"
 - gives a list of candidate domains and asks which one to pick
 - mentions registering a name and you want to add a sanity check before they spend money
-- references the companion book `domain-hunter-engineer-collab` or "domain hunter" workflow
 
 Do NOT invoke when:
 

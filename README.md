@@ -192,13 +192,3 @@ This repo is structured for both human readers and AI coding agents (Claude Code
 | Get the smallest possible context for one module| [`docs/context-cards/`](docs/context-cards/)                  |
 
 The `docs/agents/` and `docs/context-cards/` directories are written for tasks that span exactly one module — load only the relevant card to keep context cost predictable.
-
-## Background
-
-This project is a tools-side companion to the (Japanese-language) book
-**「2人ではじめる中古ドメイン・ビジネス: 目利き×運用の協業設計」** by Ken Imoto,
-which covers expired-domain-abuse policy boundaries, LLMO-era authority
-evaluation, revenue-share contracts, and exit-route economics for
-domain-and-content businesses. `domain-pre-flight` distils the
-"will I regret registering this name?" pre-flight subset of that material
-into a runnable check.

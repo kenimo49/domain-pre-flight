@@ -25,4 +25,4 @@ The LLMO check is *permanently* marked experimental in CLI output (the table tit
 
 - **Make LLMO opt-in (default-off) instead of experimental-but-on.** Considered; rejected because the check is offline and cheap, so default-on costs nothing, and the signal is occasionally useful.
 - **Separate "experimental" badge per axis (cluster experimental, length not).** Over-engineered for the actual precision differences.
-- **Drop the LLMO check entirely.** The book chapter that motivated it (LLMO authority in `domain-hunter-engineer-collab` ch06) is real and the signal is occasionally useful; keep it, label it correctly.
+- **Drop the LLMO check entirely.** The signal is occasionally useful — pronounceability and memorability do correlate with how a name performs in AI-search contexts; keep it, label it correctly.

@@ -6,8 +6,6 @@
 
 A Python CLI that runs **pre-flight checks before someone registers a domain for a new site or app**. It is *not* a domain-investing or aftermarket-trading tool. It answers one question: *"is this name safe to register?"*
 
-The companion is the (currently unpublished) Japanese-language Kindle book `domain-hunter-engineer-collab` by Ken Imoto; this tool is the runnable subset of chapters 1–6 of that book ("evaluation / authority").
-
 ## How to use this map
 
 Tasks usually land in one of four shapes. Jump to the right doc:
