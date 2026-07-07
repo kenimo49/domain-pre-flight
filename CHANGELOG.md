@@ -2,6 +2,19 @@
 
 All notable changes to **domain-pre-flight** are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions follow [SemVer](https://semver.org/) with the convention that **0.x is experimental** — breaking changes can land on a minor bump.
 
+## [0.9.0] — 2026-07-07
+
+### Added
+
+- **MCP server** (`domain-pre-flight[mcp]`) — new optional extra and `domain-pre-flight-mcp` entry point. Ships an MCP (Model Context Protocol) server built on FastMCP so AI assistants (Claude Code / Cursor / Claude Desktop) can call the checks as tools. Exposes 4 use-case-oriented tools rather than mapping every CLI flag: `check_domain`, `check_handles`, `check_trademark`, `list_typo_permutations`.
+- **Subprocess-variant reference implementation** — `examples/subprocess-variant/` ships a deliberately naive subprocess-based MCP server plus a benchmark script (`bench.py`) as the "before" half of a security / latency comparison. Not for production.
+- **PyPI publishing workflow** — `.github/workflows/publish.yml` publishes to PyPI via Trusted Publisher OIDC on every `v*` tag push; no long-lived API tokens.
+
+### Changed
+
+- `pyproject.toml` gains `[project.optional-dependencies].mcp = ["mcp>=1.2"]` and `[project.scripts].domain-pre-flight-mcp = "..."`. Core CLI users are unaffected — the `mcp` dependency only installs when `[mcp]` is requested.
+- `release.yml` no longer holds a `PYPI_API_TOKEN` fallback path; PyPI publishing is centralised in `publish.yml`.
+
 ## [0.8.0] — 2026-05-08
 
 ### Added
