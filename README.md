@@ -1,5 +1,7 @@
 # domain-pre-flight
 
+![domain-pre-flight — pre-flight checks before registering a domain](docs/assets/hero.png)
+
 [![PyPI version](https://img.shields.io/pypi/v/domain-pre-flight.svg)](https://pypi.org/project/domain-pre-flight/)
 [![Python versions](https://img.shields.io/pypi/pyversions/domain-pre-flight.svg)](https://pypi.org/project/domain-pre-flight/)
 [![test](https://github.com/kenimo49/domain-pre-flight/actions/workflows/test.yml/badge.svg)](https://github.com/kenimo49/domain-pre-flight/actions/workflows/test.yml)
