@@ -34,7 +34,7 @@ class SuggestCandidate:
     domain: str
     available: bool | None  # True=free, False=taken, None=RDAP inconclusive
     hn_mentions_30d: int
-    signal: str  # "🟢" / "🟡" / "⚪"
+    signal: str  # "🟢" / "🟡" / "⚪" / "" (taken or unknown)
 
 
 @dataclass
@@ -150,21 +150,21 @@ def check_suggest(domain: str, *, count: int = 5) -> SuggestReport:
     except (ImportError, EnvironmentError) as exc:
         report.issues.append(str(exc))
         return report
-    except Exception as exc:
-        report.issues.append(f"LLM error: {exc}")
+    except Exception:
+        report.issues.append("LLM error: could not generate suggestions — check your API key and network")
         return report
 
     for term in terms:
         dot_com = f"{term}.com"
         available = _rdap_available(dot_com)
-        mentions = _hn_mentions(term) if available is not False else 0
+        mentions = _hn_mentions(term) if available is True else 0
         report.candidates.append(
             SuggestCandidate(
                 term=term,
                 domain=dot_com,
                 available=available,
                 hn_mentions_30d=mentions,
-                signal=_signal(mentions) if available is not False else "",
+                signal=_signal(mentions) if available is True else "",
             )
         )
 

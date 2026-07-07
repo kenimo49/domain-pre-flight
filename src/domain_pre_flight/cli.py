@@ -406,7 +406,7 @@ def main(ctx: click.Context) -> None:
 )
 @click.option(
     "--suggest-count",
-    type=int,
+    type=click.IntRange(min=1),
     default=5,
     show_default=True,
     help="Number of domain suggestions to generate (used with --suggest).",

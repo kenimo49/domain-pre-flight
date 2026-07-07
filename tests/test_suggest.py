@@ -2,16 +2,17 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 import responses
+from click.testing import CliRunner
 
 from domain_pre_flight.checks.suggest import (
-    SuggestCandidate,
+    _generate_terms,
     _hn_mentions,
     _rdap_available,
     _signal,
     check_suggest,
 )
+from domain_pre_flight.cli import main
 
 # ---------------------------------------------------------------------------
 # _rdap_available
@@ -244,3 +245,109 @@ def test_check_suggest_rdap_inconclusive(monkeypatch):
     assert len(report.candidates) == 1
     assert report.candidates[0].available is None
     assert report.candidates[0].hn_mentions_30d == 0
+
+
+# ---------------------------------------------------------------------------
+# _generate_terms — parse / sanitize
+# ---------------------------------------------------------------------------
+
+
+def _make_anthropic_client(response_text: str) -> MagicMock:
+    content_block = MagicMock()
+    content_block.text = response_text
+    message = MagicMock()
+    message.content = [content_block]
+    client = MagicMock()
+    client.messages.create.return_value = message
+    return client
+
+
+def test_generate_terms_normal(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    client = _make_anthropic_client("memorynet\ncontextdb\nfabricai")
+    with patch("anthropic.Anthropic", return_value=client):
+        terms = _generate_terms("synthetmemory", 3)
+    assert terms == ["memorynet", "contextdb", "fabricai"]
+
+
+def test_generate_terms_strips_hyphens_and_spaces(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    client = _make_anthropic_client("memory-net\ncontext db\nfabric-ai")
+    with patch("anthropic.Anthropic", return_value=client):
+        terms = _generate_terms("example", 3)
+    assert terms == ["memorynet", "contextdb", "fabricai"]
+
+
+def test_generate_terms_drops_too_short_or_long(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    client = _make_anthropic_client("ab\nvalidterm\nthisistoolongfora14charterm\nok5678")
+    with patch("anthropic.Anthropic", return_value=client):
+        terms = _generate_terms("example", 4)
+    assert "ab" not in terms
+    assert "thisistoolongfora14charterm" not in terms
+    assert "validterm" in terms
+    assert "ok5678" in terms
+
+
+def test_generate_terms_caps_at_count(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    client = _make_anthropic_client("aaaa\nbbbb\ncccc\ndddd\neeee")
+    with patch("anthropic.Anthropic", return_value=client):
+        terms = _generate_terms("example", 3)
+    assert len(terms) == 3
+
+
+def test_generate_terms_no_api_key_raises(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with patch("anthropic.Anthropic"):
+        try:
+            _generate_terms("example", 3)
+            assert False, "expected EnvironmentError"
+        except EnvironmentError as e:
+            assert "ANTHROPIC_API_KEY" in str(e)
+
+
+# ---------------------------------------------------------------------------
+# CLI integration — check --suggest
+# ---------------------------------------------------------------------------
+
+
+@responses.activate
+def test_cli_check_suggest_json(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    responses.add(responses.GET, "https://rdap.org/domain/memorynet.com", status=404)
+    responses.add(responses.GET, "https://hn.algolia.com/api/v1/search", json={"nbHits": 5}, status=200)
+
+    with patch("domain_pre_flight.checks.suggest._generate_terms", return_value=["memorynet"]):
+        runner = CliRunner()
+        result = runner.invoke(main, ["check", "example.com", "--suggest", "--suggest-count", "1", "--json"])
+
+    assert result.exit_code == 0
+    import json as _json
+    payload = _json.loads(result.output)
+    assert "suggest" in payload
+    assert len(payload["suggest"]["candidates"]) == 1
+    assert payload["suggest"]["candidates"][0]["domain"] == "memorynet.com"
+    assert payload["suggest"]["candidates"][0]["available"] is True
+
+
+@responses.activate
+def test_cli_check_suggest_missing_key_graceful(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    runner = CliRunner()
+    result = runner.invoke(main, ["check", "example.com", "--suggest"])
+    assert result.exit_code == 0
+    assert "ANTHROPIC_API_KEY" in result.output
+
+
+def test_cli_check_suggest_count_zero_rejected():
+    runner = CliRunner()
+    result = runner.invoke(main, ["check", "example.com", "--suggest", "--suggest-count", "0"])
+    assert result.exit_code != 0
+    assert "0" in result.output or "range" in result.output.lower() or "invalid" in result.output.lower()
+
+
+def test_cli_check_suggest_count_negative_rejected():
+    runner = CliRunner()
+    result = runner.invoke(main, ["check", "example.com", "--suggest", "--suggest-count", "-1"])
+    assert result.exit_code != 0
