@@ -104,7 +104,7 @@ def _generate_terms(sld: str, count: int) -> list[str]:
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        raise EnvironmentError("ANTHROPIC_API_KEY is not set")
+        raise OSError("ANTHROPIC_API_KEY is not set")
 
     client = anthropic.Anthropic(api_key=api_key)
     prompt = (
@@ -147,7 +147,7 @@ def check_suggest(domain: str, *, count: int = 5) -> SuggestReport:
 
     try:
         terms = _generate_terms(sld, count)
-    except (ImportError, EnvironmentError) as exc:
+    except (ImportError, OSError) as exc:
         report.issues.append(str(exc))
         return report
     except Exception:

@@ -22,8 +22,8 @@ from .checks.permutations import generate_permutations
 from .checks.rdap import RdapReport, check_rdap
 from .checks.score import EXIT_CODES, Band, Verdict, aggregate
 from .checks.semantics import SUPPORTED_LANGUAGES, SemanticsReport, check_semantics
-from .checks.trademark import TrademarkReport, check_trademark
 from .checks.suggest import SuggestReport, check_suggest
+from .checks.trademark import TrademarkReport, check_trademark
 from .checks.typosquat import TyposquatReport, check_typosquat
 
 _HANDLE_STATUS_STYLES = {

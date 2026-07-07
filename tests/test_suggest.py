@@ -303,7 +303,7 @@ def test_generate_terms_no_api_key_raises(monkeypatch):
         try:
             _generate_terms("example", 3)
             assert False, "expected EnvironmentError"
-        except EnvironmentError as e:
+        except OSError as e:
             assert "ANTHROPIC_API_KEY" in str(e)
 
 
