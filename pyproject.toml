@@ -53,6 +53,7 @@ dev = [
 Homepage = "https://github.com/kenimo49/domain-pre-flight"
 Repository = "https://github.com/kenimo49/domain-pre-flight"
 Issues = "https://github.com/kenimo49/domain-pre-flight/issues"
+Funding = "https://github.com/sponsors/kenimo49"
 
 [project.scripts]
 domain-pre-flight = "domain_pre_flight.cli:main"
