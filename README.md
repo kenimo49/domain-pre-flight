@@ -194,3 +194,7 @@ This repo is structured for both human readers and AI coding agents (Claude Code
 | Get the smallest possible context for one module| [`docs/context-cards/`](docs/context-cards/)                  |
 
 The `docs/agents/` and `docs/context-cards/` directories are written for tasks that span exactly one module — load only the relevant card to keep context cost predictable.
+
+---
+
+If this project saved you time, you can [sponsor its continued maintenance](https://github.com/sponsors/kenimo49).
