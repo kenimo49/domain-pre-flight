@@ -6,6 +6,8 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/domain-pre-flight.svg)](https://pypi.org/project/domain-pre-flight/)
 [![test](https://github.com/kenimo49/domain-pre-flight/actions/workflows/test.yml/badge.svg)](https://github.com/kenimo49/domain-pre-flight/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/kenimo49?logo=githubsponsors&label=Sponsor)](https://github.com/sponsors/kenimo49)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-tip-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/kenimo49)
 
 > ⚠️ **Status: experimental / under active validation.**
 > Heuristics, score weights, and thresholds are still being calibrated against real-world domain decisions.
