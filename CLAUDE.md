@@ -70,6 +70,11 @@ pytest -q tests/test_typosquat.py      # one module
 bash scripts/smoke.sh --offline        # CLI E2E (no network)
 bash scripts/smoke.sh                  # CLI E2E (hits Wayback)
 
+# Lint — CI runs these on every push; run them BEFORE pushing, or install
+# the pre-push hook once: git config core.hooksPath .githooks
+ruff check src tests scripts
+mypy src/domain_pre_flight
+
 # Run the CLI locally (works after `pip install -e .`)
 dpf check example.com
 dpf typosquat goolge.com

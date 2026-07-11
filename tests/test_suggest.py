@@ -2,6 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 import responses
 from click.testing import CliRunner
 
@@ -139,17 +140,6 @@ def test_check_suggest_no_anthropic_package(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def _make_anthropic_mock(terms: list[str]) -> MagicMock:
-    """Build a minimal anthropic client mock that returns *terms* as text."""
-    content_block = MagicMock()
-    content_block.text = "\n".join(terms)
-    message = MagicMock()
-    message.content = [content_block]
-    client = MagicMock()
-    client.messages.create.return_value = message
-    return client
-
-
 @responses.activate
 def test_check_suggest_happy_path(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -169,8 +159,6 @@ def test_check_suggest_happy_path(monkeypatch):
         json={"nbHits": 7},
         status=200,
     )
-
-    anthropic_mock = _make_anthropic_mock(["memorynet", "contextdb"])
 
     with patch("domain_pre_flight.checks.suggest._generate_terms", return_value=["memorynet", "contextdb"]):
         report = check_suggest("synthetmemory.com", count=2)
@@ -254,6 +242,7 @@ def test_check_suggest_rdap_inconclusive(monkeypatch):
 
 def _make_anthropic_client(response_text: str) -> MagicMock:
     content_block = MagicMock()
+    content_block.type = "text"
     content_block.text = response_text
     message = MagicMock()
     message.content = [content_block]
@@ -299,12 +288,8 @@ def test_generate_terms_caps_at_count(monkeypatch):
 
 def test_generate_terms_no_api_key_raises(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    with patch("anthropic.Anthropic"):
-        try:
-            _generate_terms("example", 3)
-            assert False, "expected EnvironmentError"
-        except OSError as e:
-            assert "ANTHROPIC_API_KEY" in str(e)
+    with patch("anthropic.Anthropic"), pytest.raises(OSError, match="ANTHROPIC_API_KEY"):
+        _generate_terms("example", 3)
 
 
 # ---------------------------------------------------------------------------

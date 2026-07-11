@@ -120,7 +120,7 @@ def _generate_terms(sld: str, count: int) -> list[str]:
         max_tokens=200,
         messages=[{"role": "user", "content": prompt}],
     )
-    raw = msg.content[0].text.strip()
+    raw = "".join(block.text for block in msg.content if block.type == "text").strip()
     terms: list[str] = []
     for line in raw.splitlines():
         t = line.strip().lower().replace(" ", "").replace("-", "")

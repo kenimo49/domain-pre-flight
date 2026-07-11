@@ -22,6 +22,9 @@ pytest -q
 ruff check src tests scripts
 mypy src/domain_pre_flight
 bash scripts/smoke.sh --offline
+
+# Optional but recommended: run ruff + mypy automatically before every push
+git config core.hooksPath .githooks
 ```
 
 ## Where to make changes

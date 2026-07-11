@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Pre-push hook: run the same static checks as CI (test.yml lint job).
+# Install once with: git config core.hooksPath .githooks
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Prefer the project venv when present.
+if [ -d .venv/bin ]; then
+  PATH="$PWD/.venv/bin:$PATH"
+fi
+
+echo "pre-push: ruff check src tests scripts"
+ruff check src tests scripts
+
+echo "pre-push: mypy src/domain_pre_flight"
+mypy src/domain_pre_flight
+
+echo "pre-push: OK"
